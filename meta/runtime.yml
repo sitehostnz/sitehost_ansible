@@ -1,0 +1,5 @@
+---
+requires_ansible: ">=2.11"
+action_groups:
+  sitehost:
+    - server

@@ -1,0 +1,18 @@
+---
+authors:
+  - "Gonzalo Rios @gonzariosm"
+dependencies: {}
+description: "Ansible Collection for SiteHost"
+documentation: ""
+homepage: ""
+issues: ""
+license_file: ""
+name: cloud
+namespace: sitehost
+readme: README.md
+repository: ""
+tags:
+  - sitehost
+  - cloud
+version: 1.0.0
+build_ignore: ["*.tar.gz", ".github", ".venv"]

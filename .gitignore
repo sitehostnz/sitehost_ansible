@@ -1,0 +1,5 @@
+cloud-config-sitehost.ini
+output
+resources
+sitehost-cloud-*.tar.gz
+.venv
