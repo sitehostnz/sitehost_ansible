@@ -8,12 +8,12 @@ __metaclass__ = type
 
 import random
 import time
-import urllib
+from collections import OrderedDict
 
 from ansible.module_utils._text import to_text
 from ansible.module_utils.basic import env_fallback
 from ansible.module_utils.six.moves.urllib.parse import quote
-from ansible.module_utils.urls import fetch_url
+from ansible.module_utils.urls import fetch_url, prepare_multipart
 
 SH_USER_AGENT = "Ansible SiteHost"
 
@@ -104,10 +104,10 @@ class AnsibleSitehost:
         self.resource_get_details = resource_get_details
 
         # List of params used to create the resource
-        self.resource_create_param_keys = resource_create_param_keys or []
+        self.resource_create_param_keys = resource_create_param_keys or OrderedDict()
 
         # List of params used to update the resource
-        self.resource_update_param_keys = resource_update_param_keys or []
+        self.resource_update_param_keys = resource_update_param_keys or OrderedDict()
 
         # Some resources have PUT, many have PATCH
         self.resource_update_method = resource_update_method
@@ -151,36 +151,33 @@ class AnsibleSitehost:
 
         path += query
 
-        data = self.module.jsonify(data)
+        header, data = prepare_multipart(data)
 
-        retry_max_delay = self.module.params["api_retry_max_delay"]
+
+        headers = self.headers
+        headers['Content-Type'] = header
 
         info = dict()
         resp_body = None
-        for retry in range(0, self.module.params["api_retries"]):
-            resp, info = fetch_url(
-                self.module,
-                self.module.params["api_endpoint"] + path,
-                method=method,
-                data=data,
-                headers=self.headers,
-                timeout=self.module.params["api_timeout"],
-            )
 
-            resp_body = resp.read() if resp is not None else ""
+        resp, info = fetch_url(
+            self.module,
+            self.module.params["api_endpoint"] + path,
+            method=method,
+            data=data,
+            headers=headers,
+            timeout=self.module.params["api_timeout"],
+        )
 
-            # Check for:
-            # 429 Too Many Requests
-            # 500 Internal Server Error
-            if info["status"] not in (429, 500):
-                break
-
-            # SiteHost has a rate limiting requests per second, try to be polite
-            # Use exponential backoff plus a little bit of randomness
-            backoff(retry=retry, retry_max_delay=retry_max_delay)
+        resp_body = resp.read() if resp is not None else ""
 
         # Success with content
         if info["status"] in (200, 201, 202):
+            # if resp_body["status"] == False:
+            #     self.module.fail_json(
+            #         msg='Failure while calling the SiteHost API with %s for "%s".' % (method, path),
+            #         fetch_url_info=info,
+            #     )
             return self.module.from_json(to_text(resp_body, errors="surrogate_or_strict"))
 
         # Success without content
@@ -188,9 +185,79 @@ class AnsibleSitehost:
             return dict()
 
         self.module.fail_json(
-            msg='Failure while calling the SiteHost API v2 with %s for "%s".' % (method, path),
+            msg='Failure while calling the SiteHost API with %s for "%s".' % (method, path),
             fetch_url_info=info,
         )
+
+    def _encode_files(files, data):
+        """Build the body for a multipart/form-data request.
+
+        Will successfully encode files when passed as a dict or a list of
+        tuples. Order is retained if data is a list of tuples but arbitrary
+        if parameters are supplied as a dict.
+        The tuples may be 2-tuples (filename, fileobj), 3-tuples (filename, fileobj, contentype)
+        or 4-tuples (filename, fileobj, contentype, custom_headers).
+        """
+        if not files:
+            raise ValueError("Files must be provided.")
+        elif isinstance(data, basestring):
+            raise ValueError("Data must not be a string.")
+
+        new_fields = []
+        fields = to_key_val_list(data or {})
+        files = to_key_val_list(files or {})
+
+        for field, val in fields:
+            if isinstance(val, basestring) or not hasattr(val, "__iter__"):
+                val = [val]
+            for v in val:
+                if v is not None:
+                    # Don't call str() on bytestrings: in Py3 it all goes wrong.
+                    if not isinstance(v, bytes):
+                        v = str(v)
+
+                    new_fields.append(
+                        (
+                            field.decode("utf-8")
+                            if isinstance(field, bytes)
+                            else field,
+                            v.encode("utf-8") if isinstance(v, str) else v,
+                        )
+                    )
+
+        for (k, v) in files:
+            # support for explicit filename
+            ft = None
+            fh = None
+            if isinstance(v, (tuple, list)):
+                if len(v) == 2:
+                    fn, fp = v
+                elif len(v) == 3:
+                    fn, fp, ft = v
+                else:
+                    fn, fp, ft, fh = v
+            else:
+                fn = guess_filename(v) or k
+                fp = v
+
+            if isinstance(fp, (str, bytes, bytearray)):
+                fdata = fp
+            elif hasattr(fp, "read"):
+                fdata = fp.read()
+            elif fp is None:
+                continue
+            else:
+                fdata = fp
+
+            rf = RequestField(name=k, data=fdata, filename=fn, headers=fh)
+            rf.make_multipart(content_type=ft)
+            new_fields.append(rf)
+
+        body, content_type = encode_multipart_formdata(new_fields)
+
+        return body, content_type
+
+
 
     def query_filter_list_by_name(
         self,
@@ -279,35 +346,15 @@ class AnsibleSitehost:
         return resource
 
     def create_or_update(self):
-        resource = self.query()
-        if not resource:
-            resource = self.create()
-        else:
-            resource = self.update(resource)
+        #resource = self.query()
+        #if not resource:
+        resource = self.create()
+        #else:
+            #resource = self.update(resource)
         return resource
 
     def present(self):
         self.get_result(self.create_or_update())
-
-    def create(self):
-        data = dict()
-        for param in self.resource_create_param_keys:
-            data[param] = self.module.params.get(param)
-
-        self.result["changed"] = True
-        resource = dict()
-
-        self.result["diff"]["before"] = dict()
-        self.result["diff"]["after"] = data
-
-        if not self.module.check_mode:
-            resource = self.api_query(
-                path=self.resource_path,
-                method="POST",
-                data=data,
-            )
-
-        return resource.get(self.resource_result_key_singular) if resource else dict()
 
     def is_diff(self, param, resource):
         value = self.module.params.get(param)

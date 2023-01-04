@@ -166,21 +166,19 @@ class AnsibleSitehostServer(AnsibleSitehost):
         return resource
 
     def create(self):
-        #return super(AnsibleSitehostServer, self).create()
-        # if state == self.module.params["state"] and (resource["power_status"] != power_status or force):
-        #     self.result["changed"] = True
-        #     if not self.module.check_mode:
-        #         self.api_query(
-        #             path="%s/%s/%s" % (self.resource_path, resource[self.resource_key_id], action),
-        #             method="POST",
-        #         )
-        #         resource = self.wait_for_state(resource=resource, key="power_status", state=power_status)
-        # return resource
-
         data = OrderedDict()
 
-        for param in self.resource_create_param_keys:
-            data[param] = self.module.params.get(param)
+        data["label"] = self.module.params.get("label")
+        data["location"] = self.module.params.get("location")
+        data["product_code"] = self.module.params.get("product_code")
+        data["image"] = self.module.params.get("image")
+        # data["ssh_keys"] = self.module.params.get("ssh_keys")
+
+        # for param in self.resource_create_param_keys:
+        #     if self.module.params.get(param) is not None:
+        #         data[param] = self.module.params.get(param)
+
+        data["params[ipv4]"] = "auto"
 
         self.result["changed"] = True
         resource = dict()
@@ -217,7 +215,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
         if resource:
             resource = self.wait_for_state(resource=resource, key="status", state="active")
             resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
-            # Hanlde power status
+            # Handle power status
             resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
             resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
             resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
@@ -261,7 +259,7 @@ def main():
         module=module,
         namespace="sitehost_server",
         resource_path="/server",
-        resource_result_key_singular="server",
+        resource_result_key_singular="return",
         resource_create_param_keys=[
             "label",
             "location",
@@ -276,6 +274,9 @@ def main():
     )
 
     state = module.params.get("state")  # type: ignore
+
+    print(state)
+
     if state == "absent":
         sitehost.absent()
     else:
