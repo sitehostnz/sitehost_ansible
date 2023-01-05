@@ -137,14 +137,14 @@ class AnsibleSitehostServer(AnsibleSitehost):
         return ssh_key_ids
 
     def transform_resource(self, resource):
-        if not resource:
-            return resource
+        # if not resource:
+        #     return resource
 
-        features = resource.get("features", list())
-        resource["backups"] = "enabled" if "auto_backups" in features else "disabled"
-        resource["enable_ipv6"] = "ipv6" in features
-        resource["ddos_protection"] = "ddos_protection" in features
-        resource["vpcs"] = self.get_instance_vpcs(resource=resource)
+        # features = resource.get("features", list())
+        # resource["backups"] = "enabled" if "auto_backups" in features else "disabled"
+        # resource["enable_ipv6"] = "ipv6" in features
+        # resource["ddos_protection"] = "ddos_protection" in features
+        # resource["vpcs"] = self.get_instance_vpcs(resource=resource)
 
         return resource
 
@@ -153,6 +153,8 @@ class AnsibleSitehostServer(AnsibleSitehost):
             if self.module.params["ssh_keys"] is not None:
                 # sshkey_id ist a list of ids
                 self.module.params["sshkey_id"] = self.get_ssh_key_ids()
+
+        super(AnsibleSitehostServer, self).configure()
 
     def handle_power_status(self, resource, state, action, power_status, force=False):
         if state == self.module.params["state"] and (resource["power_status"] != power_status or force):
@@ -173,11 +175,6 @@ class AnsibleSitehostServer(AnsibleSitehost):
         data["product_code"] = self.module.params.get("product_code")
         data["image"] = self.module.params.get("image")
         # data["ssh_keys"] = self.module.params.get("ssh_keys")
-
-        # for param in self.resource_create_param_keys:
-        #     if self.module.params.get(param) is not None:
-        #         data[param] = self.module.params.get(param)
-
         data["params[ipv4]"] = "auto"
 
         self.result["changed"] = True
@@ -193,6 +190,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
                 data=data,
             )
 
+        # return resource if resource else dict()
         return resource.get(self.resource_result_key_singular) if resource else dict()
 
     def update(self, resource):
@@ -213,19 +211,16 @@ class AnsibleSitehostServer(AnsibleSitehost):
     def create_or_update(self):
         resource = super(AnsibleSitehostServer, self).create_or_update()
         if resource:
-            resource = self.wait_for_state(resource=resource, key="status", state="active")
-            resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
-            # Handle power status
-            resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
-            resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
-            resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
+            resource = self.wait_for_job(resource, job_id=resource["job_id"], state="Completed")
+        #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
+        #     # Handle power status
+        #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
+        #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
+        #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
         return resource
 
     def transform_result(self, resource):
-        if resource:
-            resource["user_data"] = self.get_user_data(resource=resource)
         return resource
-
 
 def main():
     argument_spec = sitehost_argument_spec()
@@ -275,13 +270,10 @@ def main():
 
     state = module.params.get("state")  # type: ignore
 
-    print(state)
-
     if state == "absent":
         sitehost.absent()
     else:
         sitehost.present()
-
 
 if __name__ == "__main__":
     main()

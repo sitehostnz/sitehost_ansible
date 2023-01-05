@@ -9,14 +9,19 @@ __metaclass__ = type
 import random
 import time
 from collections import OrderedDict
-
+from ansible.errors import AnsibleError
 from ansible.module_utils._text import to_text
 from ansible.module_utils.basic import env_fallback
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.urls import fetch_url, prepare_multipart
 
-SH_USER_AGENT = "Ansible SiteHost"
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
+SH_USER_AGENT = "Ansible SiteHost"
 
 def sitehost_argument_spec():
     return dict(
@@ -130,6 +135,12 @@ class AnsibleSitehost:
             "Accept": "application/json",
         }
 
+        # Check if the requests package is installed
+        if not REQUESTS_AVAILABLE:
+            self.module.fail_json(
+            msg='requests is required for this module.  Please run "pip install requests"',
+        )
+
         # Hook custom configurations
         self.configure()
 
@@ -151,113 +162,28 @@ class AnsibleSitehost:
 
         path += query
 
-        header, data = prepare_multipart(data)
-
-
-        headers = self.headers
-        headers['Content-Type'] = header
-
-        info = dict()
-        resp_body = None
-
-        resp, info = fetch_url(
-            self.module,
-            self.module.params["api_endpoint"] + path,
-            method=method,
-            data=data,
-            headers=headers,
-            timeout=self.module.params["api_timeout"],
+        r = requests.request(method, headers=self.headers,
+            url=self.module.params["api_endpoint"] + path,
+            data=data
         )
 
-        resp_body = resp.read() if resp is not None else ""
+        json_r = r.json()
 
         # Success with content
-        if info["status"] in (200, 201, 202):
-            # if resp_body["status"] == False:
-            #     self.module.fail_json(
-            #         msg='Failure while calling the SiteHost API with %s for "%s".' % (method, path),
-            #         fetch_url_info=info,
-            #     )
-            return self.module.from_json(to_text(resp_body, errors="surrogate_or_strict"))
+        if r.status_code in (200, 201, 202):
+            if json_r['status'] == False:
+                self.module.fail_json(**json_r)
+
+            return self.module.from_json(to_text(r.text, errors="surrogate_or_strict"))
 
         # Success without content
-        if info["status"] in (404, 204):
+        if r.status_code in (404, 204):
             return dict()
 
         self.module.fail_json(
             msg='Failure while calling the SiteHost API with %s for "%s".' % (method, path),
-            fetch_url_info=info,
+            #fetch_url_info=info,
         )
-
-    def _encode_files(files, data):
-        """Build the body for a multipart/form-data request.
-
-        Will successfully encode files when passed as a dict or a list of
-        tuples. Order is retained if data is a list of tuples but arbitrary
-        if parameters are supplied as a dict.
-        The tuples may be 2-tuples (filename, fileobj), 3-tuples (filename, fileobj, contentype)
-        or 4-tuples (filename, fileobj, contentype, custom_headers).
-        """
-        if not files:
-            raise ValueError("Files must be provided.")
-        elif isinstance(data, basestring):
-            raise ValueError("Data must not be a string.")
-
-        new_fields = []
-        fields = to_key_val_list(data or {})
-        files = to_key_val_list(files or {})
-
-        for field, val in fields:
-            if isinstance(val, basestring) or not hasattr(val, "__iter__"):
-                val = [val]
-            for v in val:
-                if v is not None:
-                    # Don't call str() on bytestrings: in Py3 it all goes wrong.
-                    if not isinstance(v, bytes):
-                        v = str(v)
-
-                    new_fields.append(
-                        (
-                            field.decode("utf-8")
-                            if isinstance(field, bytes)
-                            else field,
-                            v.encode("utf-8") if isinstance(v, str) else v,
-                        )
-                    )
-
-        for (k, v) in files:
-            # support for explicit filename
-            ft = None
-            fh = None
-            if isinstance(v, (tuple, list)):
-                if len(v) == 2:
-                    fn, fp = v
-                elif len(v) == 3:
-                    fn, fp, ft = v
-                else:
-                    fn, fp, ft, fh = v
-            else:
-                fn = guess_filename(v) or k
-                fp = v
-
-            if isinstance(fp, (str, bytes, bytearray)):
-                fdata = fp
-            elif hasattr(fp, "read"):
-                fdata = fp.read()
-            elif fp is None:
-                continue
-            else:
-                fdata = fp
-
-            rf = RequestField(name=k, data=fdata, filename=fn, headers=fh)
-            rf.make_multipart(content_type=ft)
-            new_fields.append(rf)
-
-        body, content_type = encode_multipart_formdata(new_fields)
-
-        return body, content_type
-
-
 
     def query_filter_list_by_name(
         self,
@@ -330,18 +256,24 @@ class AnsibleSitehost:
         resources = self.api_query(path=path, query_params=query_params)
         return resources[result_key] if resources else []
 
-    def wait_for_state(self, resource, key, state, cmp="="):
+    def wait_for_job(self, resource, job_id, state = "Completed"):
         for retry in range(0, 30):
-            resource = self.query_by_id(resource_id=resource[self.resource_key_id], skip_transform=False)
-            if cmp == "=":
-                if key not in resource or resource[key] == state or not resource[key]:
-                    break
-            else:
-                if key not in resource or resource[key] != state or not resource[key]:
-                    break
+            job_resource = self.api_query(
+                path="/job/get.json",
+                method="GET",
+                query_params=dict(job_id=job_id, type="daemon")
+            )
+
+            job_status = job_resource.get("return")["state"]
+
+            if job_status == state:
+                break
+            elif job_status == "Failed":
+                self.module.fail_json(msg="Job %s failed" % (job_id))
+
             backoff(retry=retry)
         else:
-            self.module.fail_json(msg="Wait for %s to become %s timed out" % (key, state))
+            self.module.fail_json(msg="Wait for %s to become %s timed out" % (job_id, state))
 
         return resource
 
