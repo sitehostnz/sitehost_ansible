@@ -147,6 +147,37 @@ class AnsibleSitehostServer(AnsibleSitehost):
         # resource["vpcs"] = self.get_instance_vpcs(resource=resource)
 
         return resource
+    
+    def absent(self):
+        # Overloading parent class method as a test right now
+        server_label = self.module.params.get("label") # get the server label user given
+
+        # get list of servers that potentially matches the user given server label
+        list_of_servers  = self.api_query(path = self.resource_path + "/list_servers.json",query_params={
+            "filters[name]": server_label,
+            "filters[sort_by]": "created",
+            "filters[sort_dir]": "desc"
+        })["return"]["data"]
+        
+        # since sitehost api return all servers losely matching the given server label
+        # this will filter out all servers that does not excatly match the given server label
+        list_of_servers = list(filter(lambda x:x["label"]==server_label, list_of_servers))
+
+        if list_of_servers: # server exist, deleting newest server
+            deleteresult = self.api_query(path = self.resource_path + "/delete.json", query_params={
+                "name":list_of_servers[0]["name"]
+            })
+
+            self.result["changed"] = True
+
+            self.result["diff"]["before"] = list_of_servers[0]
+            self.result["diff"]["after"] = deleteresult
+            self.result["message"]=deleteresult["msg"]
+
+            self.module.exit_json(**self.result)
+        else:# server does not exist, so just skip and continue
+            self.result["skipped"] = True
+            self.module.exit_json(msg="Server does not exist, skipping task.",**self.result)
 
     def configure(self):
         if self.module.params["state"] != "absent":

@@ -181,7 +181,7 @@ class AnsibleSitehost:
             return dict()
 
         self.module.fail_json(
-            msg='Failure while calling the SiteHost API with %s for "%s".' % (method, path),
+            msg='Failure while calling the SiteHost API with %s for "%s". With message: %s' % (method, path,json_r["msg"]),
             #fetch_url_info=info,
         )
 
