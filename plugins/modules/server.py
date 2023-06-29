@@ -149,7 +149,9 @@ class AnsibleSitehostServer(AnsibleSitehost):
         return resource
     
     def absent(self):
-        # Overloading parent class method as a test right now
+        """deletes a server
+        Overloading parent class method as a test right now
+        """
         server_label = self.module.params.get("label") # get the server label user given
 
         # get list of servers that potentially matches the user given server label
@@ -167,6 +169,8 @@ class AnsibleSitehostServer(AnsibleSitehost):
             deleteresult = self.api_query(path = self.resource_path + "/delete.json", query_params={
                 "name":list_of_servers[0]["name"]
             })
+
+            self.wait_for_job(resource=deleteresult,job_id=deleteresult["return"]["job_id"]) # pause execution until the server is fully deleted
 
             self.result["changed"] = True
 
@@ -221,8 +225,14 @@ class AnsibleSitehostServer(AnsibleSitehost):
                 data=data,
             )
 
+        if resource:
+            self.wait_for_job(resource, job_id=resource["return"]["job_id"], state="Completed")
+
         # return resource if resource else dict()
-        return resource.get(self.resource_result_key_singular) if resource else dict()
+        # return resource.get(self.resource_result_key_singular) if resource else dict()
+        
+        self.result[self.namespace] = self.transform_result(resource)
+        self.module.exit_json(**self.result)
 
     def update(self, resource):
         user_data = self.get_user_data(resource=resource)
@@ -240,17 +250,20 @@ class AnsibleSitehostServer(AnsibleSitehost):
         return super(AnsibleSitehostServer, self).update(resource=resource)
 
     def create_or_update(self):
-        resource = super(AnsibleSitehostServer, self).create_or_update()
-        if resource:
-            resource = self.wait_for_job(resource, job_id=resource["job_id"], state="Completed")
+        self.create()
+        # resource = super(AnsibleSitehostServer, self).create_or_update()
         #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
         #     # Handle power status
         #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
         #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
         #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
-        return resource
+        # return resource
+    
+    def present(self):
+        self.create_or_update()
 
     def transform_result(self, resource):
+        """currently does nothing"""
         return resource
 
 def main():
@@ -258,9 +271,10 @@ def main():
     argument_spec.update(
         dict(
             label=dict(type="str", required=True),
-            location=dict(type="str", required=True),
-            product_code=dict(type="str", required=True),
-            image=dict(type="str", required=True),
+            name=dict(type="str"),
+            location=dict(type="str"),
+            product_code=dict(type="str"),
+            image=dict(type="str"),
             ssh_keys=dict(type="list", elements="str", no_log=False),
             state=dict(
                 choices=[

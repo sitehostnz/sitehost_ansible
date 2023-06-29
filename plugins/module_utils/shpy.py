@@ -39,7 +39,6 @@ def sitehost_argument_spec():
         api_client_id=dict(
             type="str",
             fallback=(env_fallback, ["SH_CLIENT_ID"]),
-            no_log=True,
             required=True,
         ),
         api_timeout=dict(
@@ -60,12 +59,7 @@ def sitehost_argument_spec():
     )
 
 
-def backoff(retry, retry_max_delay=12):
-    randomness = random.randint(0, 1000) / 1000.0
-    delay = 2**retry + randomness
-    if delay > retry_max_delay:
-        delay = retry_max_delay + randomness
-    time.sleep(delay)
+
 
 
 class AnsibleSitehost:
@@ -154,6 +148,19 @@ class AnsibleSitehost:
         return resource
 
     def api_query(self, path, method="GET", data=None, query_params=None):
+        """
+        low level function that directly make http rquest to the sitehost api
+        
+            Parameters:
+                path (str): should point to the api resource such as self.resource_path + apimethod
+                method (str): defaults to "GET"
+                data (dict): payload to use when using methods like POST
+                query_params (dict): URL query string in dictionary form to use in methods like GET
+            
+            Return:
+                a dictionary of the output of the http request
+
+        """
         # auth
         query = "?apikey=%s&client_id=%s" % (self.module.params["api_key"], self.module.params["api_client_id"])
         if query_params:
@@ -256,7 +263,10 @@ class AnsibleSitehost:
         resources = self.api_query(path=path, query_params=query_params)
         return resources[result_key] if resources else []
 
-    def wait_for_job(self, resource, job_id, state = "Completed"):
+    def wait_for_job(self, job_id, state = "Completed"):
+        """
+        use it to pause execution of ansible task until the job is completed
+        """
         for retry in range(0, 30):
             job_resource = self.api_query(
                 path="/job/get.json",
@@ -271,22 +281,31 @@ class AnsibleSitehost:
             elif job_status == "Failed":
                 self.module.fail_json(msg="Job %s failed" % (job_id))
 
-            backoff(retry=retry)
+            AnsibleSitehost._backoff(retry=retry)
         else:
             self.module.fail_json(msg="Wait for %s to become %s timed out" % (job_id, state))
 
-        return resource
+    
+    @staticmethod
+    def _backoff(retry, retry_max_delay=12):
+        """randomly pause the computation base on number of retries"""
+        randomness = random.randint(0, 1000) / 1000.0
+        delay = 2**retry + randomness
+        if delay > retry_max_delay:
+            delay = retry_max_delay + randomness
+        time.sleep(delay)
+    
+    
+    # def create_or_update(self):
+    #     #resource = self.query()
+    #     #if not resource:
+    #     resource = self.create()
+    #     #else:
+    #         #resource = self.update(resource)
+    #     return resource
 
-    def create_or_update(self):
-        #resource = self.query()
-        #if not resource:
-        resource = self.create()
-        #else:
-            #resource = self.update(resource)
-        return resource
-
-    def present(self):
-        self.get_result(self.create_or_update())
+    # def present(self):
+    #     self.get_result(self.create_or_update())
 
     def is_diff(self, param, resource):
         value = self.module.params.get(param)
