@@ -152,31 +152,20 @@ class AnsibleSitehostServer(AnsibleSitehost):
         """deletes a server
         Overloading parent class method as a test right now
         """
-        server_label = self.module.params.get("label") # get the server label user given
-
-        # get list of servers that potentially matches the user given server label
-        list_of_servers  = self.api_query(path = self.resource_path + "/list_servers.json",query_params={
-            "filters[name]": server_label,
-            "filters[sort_by]": "created",
-            "filters[sort_dir]": "desc"
-        })["return"]["data"]
-        
-        # since sitehost api return all servers losely matching the given server label
-        # this will filter out all servers that does not excatly match the given server label
-        list_of_servers = list(filter(lambda x:x["label"]==server_label, list_of_servers))
+        list_of_servers = self.get_servers_by_label() # get servers that matches label excactly
 
         if list_of_servers: # server exist, deleting newest server
             deleteresult = self.api_query(path = self.resource_path + "/delete.json", query_params={
                 "name":list_of_servers[0]["name"]
             })
 
-            self.wait_for_job(resource=deleteresult,job_id=deleteresult["return"]["job_id"]) # pause execution until the server is fully deleted
+            delete_job_result=self.wait_for_job(job_id=deleteresult["return"]["job_id"]) # pause execution until the server is fully deleted
 
             self.result["changed"] = True
 
             self.result["diff"]["before"] = list_of_servers[0]
-            self.result["diff"]["after"] = deleteresult
-            self.result["message"]=deleteresult["msg"]
+            self.result["diff"]["after"] = delete_job_result
+            self.result["message"]=delete_job_result["message"]
 
             self.module.exit_json(**self.result)
         else:# server does not exist, so just skip and continue
@@ -225,8 +214,8 @@ class AnsibleSitehostServer(AnsibleSitehost):
                 data=data,
             )
 
-        if resource:
-            self.wait_for_job(resource, job_id=resource["return"]["job_id"], state="Completed")
+            if resource:
+                self.wait_for_job(job_id=resource["return"]["job_id"], state="Completed")
 
         # return resource if resource else dict()
         # return resource.get(self.resource_result_key_singular) if resource else dict()
@@ -234,43 +223,89 @@ class AnsibleSitehostServer(AnsibleSitehost):
         self.result[self.namespace] = self.transform_result(resource)
         self.module.exit_json(**self.result)
 
-    def update(self, resource):
-        user_data = self.get_user_data(resource=resource)
-        resource["user_data"] = user_data.encode()
+    # def update(self):
+        
+    #     # find the server that needs to be updated
+    #     server_to_update = self.get_server_by_name()
 
-        if self.module.params["vpcs"] is not None:
-            resource["attach_vpc"] = list()
-            for vpc in list(resource["vpcs"]):
-                resource["attach_vpc"].append(vpc["id"])
 
-            # detach_vpc is a list of ids to be detached
-            resource["detach_vpc"] = list()
-            self.module.params["detach_vpc"] = self.get_detach_vpcs_ids(resource=resource)
+    #     data=OrderedDict()
 
-        return super(AnsibleSitehostServer, self).update(resource=resource)
+    #     data["name"]=self.module.params.get("name")
 
-    def create_or_update(self):
-        self.create()
-        # resource = super(AnsibleSitehostServer, self).create_or_update()
-        #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
-        #     # Handle power status
-        #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
-        #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
-        #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
-        # return resource
+    #     if self.module.params.get("label"):
+    #         data["updates[label]"]=self.module.params.get("label")
+    #     if self.module.params.get("notes"):
+    #         data["updates[notes]"]=self.module.params.get("notes")
+    #     if self.module.params.get("kernal"):
+    #         data["updates[kernal]"]=self.module.params.get("kernal")
+    #     if self.module.params.get("partitions_threshold"):
+    #         data["updates[partitions][][threshold]"]=self.module.params.get("partitions_threshold")
+        
+
+    #     update_result = self.api_query(path = "/server/update.json", method="POST", data=data)
+    #     raise Exception(["debug",update_result])
+        
+
+    # def create_or_update(self):
+    #     if self.get_server_by_name():
+    #         self.update()
+    #     elif self.get_servers_by_label():
+    #         self.create()
+    #     else:
+    #         self.module.exitjson()
+    #     # resource = super(AnsibleSitehostServer, self).create_or_update()
+    #     #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
+    #     #     # Handle power status
+    #     #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
+    #     #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
+    #     #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
+    #     # return resource
     
     def present(self):
-        self.create_or_update()
+        self.create()
 
     def transform_result(self, resource):
         """currently does nothing"""
         return resource
+    
+    def get_servers_by_label(self, server_label=None, sort_by = "created"):
+        """
+        uses sitehost api to return all servers excatly matching the server label given in the module argument
+
+        :param sort_by: defaults to "created", use to to set how the server is sorted. example: "state", "maint_date", "name"
+        """
+        if server_label is None:
+            server_label = self.module.params.get("label") # get the server label user given
+        
+
+        # get list of servers that potentially matches the user given server label
+        list_of_servers  = self.api_query(path = self.resource_path + "/list_servers.json",query_params={
+            "filters[name]": server_label,
+            "filters[sort_by]": sort_by,
+            "filters[sort_dir]": "desc"
+        })["return"]["data"]
+        
+        # since sitehost api return all servers losely matching the given server label
+        # this will filter out all servers that does not excatly match the given server label
+        list_of_servers = list(filter(lambda x:x["label"]==server_label, list_of_servers))
+
+        return list_of_servers
+    
+    def get_server_by_name(self, server_name=None):
+        """return a server by its server name"""
+        if server_name is None:
+            server_name = self.module.params.get("name")
+
+        return self.api_query(path = "/server/get_server.json", query_params=OrderedDict({
+          "name":server_name
+      }))["return"]
 
 def main():
     argument_spec = sitehost_argument_spec()
     argument_spec.update(
         dict(
-            label=dict(type="str", required=True),
+            label=dict(type="str"),
             name=dict(type="str"),
             location=dict(type="str"),
             product_code=dict(type="str"),
@@ -286,12 +321,14 @@ def main():
                 ],
                 default="present",
             ),
+            notes=dict(type="str"),
+            
         )  # type: ignore
     )
 
     module = AnsibleModule(
         argument_spec=argument_spec,
-        required_if=(("state", "present", ("product_code",)),),
+        # required_if=(("state", "present", ("product_code",)),),
         supports_check_mode=True,
     )
 

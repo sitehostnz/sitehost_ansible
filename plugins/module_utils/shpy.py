@@ -147,7 +147,7 @@ class AnsibleSitehost:
         """
         return resource
 
-    def api_query(self, path, method="GET", data=None, query_params=None):
+    def api_query(self, path, method="GET", data=OrderedDict(), query_params=None):
         """
         low level function that directly make http rquest to the sitehost api
         
@@ -169,6 +169,16 @@ class AnsibleSitehost:
 
         path += query
 
+        # if "provision" in path:
+        #     raise Exception(["debug",data, path])
+
+        # used for setting the api key and client id if they are not set
+        data.setdefault("apikey",self.module.params["api_key"])
+        data.setdefault("client_id",self.module.params["api_client_id"])
+        # move the apikey to front of body followed by client_id (order matters)
+        data.move_to_end("client_id", last=False)
+        data.move_to_end("apikey", last=False)
+
         r = requests.request(method, headers=self.headers,
             url=self.module.params["api_endpoint"] + path,
             data=data
@@ -179,7 +189,7 @@ class AnsibleSitehost:
         # Success with content
         if r.status_code in (200, 201, 202):
             if json_r['status'] == False:
-                self.module.fail_json(**json_r)
+                self.module.fail_json(**json_r, apiquery=path)
 
             return self.module.from_json(to_text(r.text, errors="surrogate_or_strict"))
 
@@ -266,6 +276,10 @@ class AnsibleSitehost:
     def wait_for_job(self, job_id, state = "Completed"):
         """
         use it to pause execution of ansible task until the job is completed
+
+        :param job_id: the job id of the job to wait
+        :param state: default to "Completed", the return state of when the job is consider done
+        :returns: a dictionary of the job details
         """
         for retry in range(0, 30):
             job_resource = self.api_query(
@@ -277,7 +291,7 @@ class AnsibleSitehost:
             job_status = job_resource.get("return")["state"]
 
             if job_status == state:
-                break
+                return job_resource["return"] # return information on job details when it succeded
             elif job_status == "Failed":
                 self.module.fail_json(msg="Job %s failed" % (job_id))
 
@@ -346,20 +360,20 @@ class AnsibleSitehost:
                 resource = self.query_by_id(resource_id=resource[self.resource_key_id])
         return resource
 
-    def absent(self):
-        resource = self.query()
-        if resource:
-            self.result["changed"] = True
+    # def absent(self):
+    #     resource = self.query()
+    #     if resource:
+    #         self.result["changed"] = True
 
-            self.result["diff"]["before"] = dict(**resource)
-            self.result["diff"]["after"] = dict()
+    #         self.result["diff"]["before"] = dict(**resource)
+    #         self.result["diff"]["after"] = dict()
 
-            if not self.module.check_mode:
-                self.api_query(
-                    path="%s/%s" % (self.resource_path, resource[self.resource_key_id]),
-                    method="DELETE",
-                )
-        self.get_result(resource)
+    #         if not self.module.check_mode:
+    #             self.api_query(
+    #                 path="%s/%s" % (self.resource_path, resource[self.resource_key_id]),
+    #                 method="DELETE",
+    #             )
+    #     self.get_result(resource)
 
     def transform_result(self, resource):
         return resource
