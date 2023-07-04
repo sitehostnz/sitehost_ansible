@@ -155,7 +155,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
         list_of_servers = self.get_servers_by_label() # get servers that matches label excactly
 
         if list_of_servers: # server exist, deleting newest server
-            deleteresult = self.api_query(path = self.resource_path + "/delete.json", query_params={
+            deleteresult = self.api_query(path = "/server/delete.json", query_params={
                 "name":list_of_servers[0]["name"]
             })
 
@@ -168,7 +168,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
             self.result["message"]=delete_job_result["message"]
 
             self.module.exit_json(**self.result)
-        else:# server does not exist, so just skip and continue
+        else:  # server does not exist, so just skip and continue
             self.result["skipped"] = True
             self.module.exit_json(msg="Server does not exist, skipping task.",**self.result)
 
@@ -223,6 +223,37 @@ class AnsibleSitehostServer(AnsibleSitehost):
         self.result[self.namespace] = self.transform_result(resource)
         self.module.exit_json(**self.result)
 
+    def upgrade(self):
+        """
+        upgrades the server, called when server name is provided and server exists
+        It will first stage the upgrade then commit the upgrade with the api, restarts server
+        """
+        server_to_upgrade = self.get_server_by_name()
+        if(server_to_upgrade["product_code"] == self.module.params.get("product_code")):  # check if server plan is same as inputed product code
+            self.module.exit_json(skipped=True, msg="Requested product is the same as current server product, skipping.")
+        
+        
+        body = OrderedDict()
+        body["name"]=self.module.params.get("name")
+        body["plan"]=self.module.params.get("product_code")
+        self.api_query(path="/server/upgrade_plan.json", method="POST", data=body)  # stage server upgrade
+        
+        body = OrderedDict()
+        body["name"]=self.module.params.get("name")
+        upgrade_job = self.api_query(path="/server/commit_disk_changes.json", method="POST", data=body)  # commit upgrade, will restart server
+
+        job_result=self.wait_for_job(upgrade_job["return"]["job_id"])
+
+        server_after_upgrade = self.get_server_by_name()
+
+        self.result["diff"]["before"] = server_to_upgrade
+        self.result["diff"]["after"] = server_after_upgrade
+        self.result["job_result"] = job_result
+        self.result["msg"] = job_result["message"]
+
+        self.module.exit_json(**self.result)
+
+
     # def update(self):
         
     #     # find the server that needs to be updated
@@ -247,23 +278,23 @@ class AnsibleSitehostServer(AnsibleSitehost):
     #     raise Exception(["debug",update_result])
         
 
-    # def create_or_update(self):
-    #     if self.get_server_by_name():
-    #         self.update()
-    #     elif self.get_servers_by_label():
-    #         self.create()
-    #     else:
-    #         self.module.exitjson()
-    #     # resource = super(AnsibleSitehostServer, self).create_or_update()
-    #     #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
-    #     #     # Handle power status
-    #     #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
-    #     #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
-    #     #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
-    #     # return resource
+    def create_or_update(self):
+        if self.module.params.get("name"): # if server name exist, upgrade the server
+            self.upgrade()
+        elif self.module.params.get("label"): # else if label only, create the new server
+            self.create()
+        else: # something is wrong with the code
+            self.module.fail_json(msg="ERROR: no name or label given, exiting")
+        # resource = super(AnsibleSitehostServer, self).create_or_update()
+        #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
+        #     # Handle power status
+        #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
+        #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
+        #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
+        # return resource
     
     def present(self):
-        self.create()
+        self.create_or_update()
 
     def transform_result(self, resource):
         """currently does nothing"""
@@ -280,7 +311,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
         
 
         # get list of servers that potentially matches the user given server label
-        list_of_servers  = self.api_query(path = self.resource_path + "/list_servers.json",query_params={
+        list_of_servers  = self.api_query(path = "/server/list_servers.json",query_params={
             "filters[name]": server_label,
             "filters[sort_by]": sort_by,
             "filters[sort_dir]": "desc"

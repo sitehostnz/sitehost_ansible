@@ -189,7 +189,7 @@ class AnsibleSitehost:
         # Success with content
         if r.status_code in (200, 201, 202):
             if json_r['status'] == False:
-                self.module.fail_json(**json_r, apiquery=path)
+                self.module.fail_json(**json_r, apiquery={"path":path, "body":data})
 
             return self.module.from_json(to_text(r.text, errors="surrogate_or_strict"))
 
