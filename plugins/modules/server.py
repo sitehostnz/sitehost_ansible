@@ -152,18 +152,18 @@ class AnsibleSitehostServer(AnsibleSitehost):
         """deletes a server
         Overloading parent class method as a test right now
         """
-        list_of_servers = self.get_servers_by_label() # get servers that matches label excactly
+        server_to_delete = self.get_server_by_name()
 
-        if list_of_servers: # server exist, deleting newest server
+        if server_to_delete: # server exist, deleting newest server
             deleteresult = self.api_query(path = "/server/delete.json", query_params={
-                "name":list_of_servers[0]["name"]
+                "name":server_to_delete["name"]
             })
 
             delete_job_result=self.wait_for_job(job_id=deleteresult["return"]["job_id"]) # pause execution until the server is fully deleted
 
             self.result["changed"] = True
 
-            self.result["diff"]["before"] = list_of_servers[0]
+            self.result["diff"]["before"] = server_to_delete
             self.result["diff"]["after"] = delete_job_result
             self.result["message"]=delete_job_result["message"]
 
@@ -250,6 +250,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
         self.result["diff"]["after"] = server_after_upgrade
         self.result["job_result"] = job_result
         self.result["msg"] = job_result["message"]
+        self.result["changed"] = True
 
         self.module.exit_json(**self.result)
 
