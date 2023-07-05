@@ -172,24 +172,72 @@ class AnsibleSitehostServer(AnsibleSitehost):
             self.result["skipped"] = True
             self.module.exit_json(msg="Server does not exist, skipping task.",**self.result)
 
-    def configure(self):
-        if self.module.params["state"] != "absent":
-            if self.module.params["ssh_keys"] is not None:
-                # sshkey_id ist a list of ids
-                self.module.params["sshkey_id"] = self.get_ssh_key_ids()
+    # def configure(self):
+    #     if self.module.params["state"] != "absent":
+    #         if self.module.params["ssh_keys"] is not None:
+    #             # sshkey_id ist a list of ids
+    #             self.module.params["sshkey_id"] = self.get_ssh_key_ids()
 
-        super(AnsibleSitehostServer, self).configure()
+    #     super(AnsibleSitehostServer, self).configure()
 
-    def handle_power_status(self, resource, state, action, power_status, force=False):
-        if state == self.module.params["state"] and (resource["power_status"] != power_status or force):
-            self.result["changed"] = True
-            if not self.module.check_mode:
-                self.api_query(
-                    path="%s/%s/%s" % (self.resource_path, resource[self.resource_key_id], action),
-                    method="POST",
-                )
-                resource = self.wait_for_state(resource=resource, key="power_status", state=power_status)
-        return resource
+    # def handle_power_status(self, resource, state, action, power_status, force=False):
+    #     if state == self.module.params["state"] and (resource["power_status"] != power_status or force):
+    #         self.result["changed"] = True
+    #         if not self.module.check_mode:
+    #             self.api_query(
+    #                 path="%s/%s/%s" % (self.resource_path, resource[self.resource_key_id], action),
+    #                 method="POST",
+    #             )
+    #             resource = self.wait_for_state(resource=resource, key="power_status", state=power_status)
+    #     return resource
+
+    def handle_power_status(self):
+        """this handles starting, stopping, and restarting servers"""
+        requested_server_state = self.module.params.get("state")
+        if requested_server_state == "restarted":  # always restart server when requested
+            
+            body = OrderedDict()
+            body["name"]=self.module.params.get("name")
+            body["state"]="reboot"
+
+            restart_result=self.api_query(path="/server/change_state.json", method="POST", data=body )
+
+            restart_job=self.wait_for_job(job_id=restart_result["return"]["job_id"])
+            self.module.exit_json(changed=True, job_status= restart_job)
+        
+        else:  # it is not a restarted state, check if it needs to turn server on or off
+            current_server_state = self.api_query(path="/server/get_state.json", query_params={
+                "name":self.module.params.get("name")
+            })["return"]["state"]
+
+            if (current_server_state == "On" and requested_server_state == "started"):  # check if the server is on
+                self.module.exit_json(skipped=True, msg="server already started, skipped task", **self.result)
+            elif (current_server_state == "Off" and requested_server_state == "stopped"):  # check if server is off
+                self.module.exit_json(skipped=True, msg="server already stopped, skipped task", **self.result)
+            else:  # the server state is different from requetsed state, start/stop server
+                if(requested_server_state == "started"):  # start server up
+                    body=OrderedDict()
+                    body["name"]=self.module.params.get("name")
+                    body["state"]="power_on"
+
+                    startjob=self.api_query(path="/server/change_state.json", method="POST", data=body)
+                    startresult=self.wait_for_job(job_id=startjob["return"]["job_id"])
+
+                    self.module.exit_json(changed=True,job_status=startresult)
+
+                elif(requested_server_state == "stopped"):  # stop the server
+                    body=OrderedDict()
+                    body["name"]=self.module.params.get("name")
+                    body["state"]="power_off"
+
+                    offjob=self.api_query(path="/server/change_state.json", method="POST", data=body)
+                    offresult=self.wait_for_job(job_id=offjob["return"]["job_id"])
+
+                    self.module.exit_json(changed=True,job_status=offresult)
+            self.module.fail_json(msg="an unexpected error occured", requested_state = requested_server_state, current_server_state = current_server_state)
+
+                
+
 
     def create(self):
         data = OrderedDict()
@@ -220,7 +268,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
         # return resource if resource else dict()
         # return resource.get(self.resource_result_key_singular) if resource else dict()
         
-        self.result[self.namespace] = self.transform_result(resource)
+        self.result[self.namespace] = self.transform_result(resource) # doesn't actually do anything, maybe delete this line?
         self.module.exit_json(**self.result)
 
     def upgrade(self):
@@ -312,11 +360,11 @@ class AnsibleSitehostServer(AnsibleSitehost):
         
 
         # get list of servers that potentially matches the user given server label
-        list_of_servers  = self.api_query(path = "/server/list_servers.json",query_params={
-            "filters[name]": server_label,
-            "filters[sort_by]": sort_by,
-            "filters[sort_dir]": "desc"
-        })["return"]["data"]
+        list_of_servers  = self.api_query(path = "/server/list_servers.json",query_params=OrderedDict([
+            ("filters[name]", server_label),
+            ("filters[sort_by]", sort_by),
+            ("filters[sort_dir]", "desc")
+        ]))["return"]["data"]
         
         # since sitehost api return all servers losely matching the given server label
         # this will filter out all servers that does not excatly match the given server label
@@ -360,7 +408,7 @@ def main():
 
     module = AnsibleModule(
         argument_spec=argument_spec,
-        # required_if=(("state", "present", ("product_code",)),),
+        required_if=(("state", "present", ("product_code",)),),
         supports_check_mode=True,
     )
 
@@ -386,8 +434,10 @@ def main():
 
     if state == "absent":
         sitehost.absent()
-    else:
+    elif state == "present":
         sitehost.present()
+    else:
+        sitehost.handle_power_status()
 
 if __name__ == "__main__":
     main()
