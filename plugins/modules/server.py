@@ -121,33 +121,7 @@ from ..module_utils.shpy import AnsibleSitehost, sitehost_argument_spec
 
 
 class AnsibleSitehostServer(AnsibleSitehost):
-    def get_ssh_key_ids(self):
-        ssh_key_names = list(self.module.params["ssh_keys"])
-        ssh_keys = self.query_list(path="/ssh-keys", result_key="ssh_keys")
 
-        ssh_key_ids = list()
-        for ssh_key in ssh_keys:
-            if ssh_key["name"] in ssh_key_names:
-                ssh_key_ids.append(ssh_key["id"])
-                ssh_key_names.remove(ssh_key["name"])
-
-        if ssh_key_names:
-            self.module.fail_json(msg="SSH key names not found: %s" % ", ".join(ssh_key_names))
-
-        return ssh_key_ids
-
-    def transform_resource(self, resource):
-        # if not resource:
-        #     return resource
-
-        # features = resource.get("features", list())
-        # resource["backups"] = "enabled" if "auto_backups" in features else "disabled"
-        # resource["enable_ipv6"] = "ipv6" in features
-        # resource["ddos_protection"] = "ddos_protection" in features
-        # resource["vpcs"] = self.get_instance_vpcs(resource=resource)
-
-        return resource
-    
     def absent(self):
         """deletes a server
         Overloading parent class method as a test right now
@@ -172,24 +146,6 @@ class AnsibleSitehostServer(AnsibleSitehost):
             self.result["skipped"] = True
             self.module.exit_json(msg="Server does not exist, skipping task.",**self.result)
 
-    # def configure(self):
-    #     if self.module.params["state"] != "absent":
-    #         if self.module.params["ssh_keys"] is not None:
-    #             # sshkey_id ist a list of ids
-    #             self.module.params["sshkey_id"] = self.get_ssh_key_ids()
-
-    #     super(AnsibleSitehostServer, self).configure()
-
-    # def handle_power_status(self, resource, state, action, power_status, force=False):
-    #     if state == self.module.params["state"] and (resource["power_status"] != power_status or force):
-    #         self.result["changed"] = True
-    #         if not self.module.check_mode:
-    #             self.api_query(
-    #                 path="%s/%s/%s" % (self.resource_path, resource[self.resource_key_id], action),
-    #                 method="POST",
-    #             )
-    #             resource = self.wait_for_state(resource=resource, key="power_status", state=power_status)
-    #     return resource
 
     def handle_power_status(self):
         """this handles starting, stopping, and restarting servers"""
@@ -246,7 +202,6 @@ class AnsibleSitehostServer(AnsibleSitehost):
         data["location"] = self.module.params.get("location")
         data["product_code"] = self.module.params.get("product_code")
         data["image"] = self.module.params.get("image")
-        # data["ssh_keys"] = self.module.params.get("ssh_keys")
         data["params[ipv4]"] = "auto"
 
         self.result["changed"] = True
@@ -265,10 +220,6 @@ class AnsibleSitehostServer(AnsibleSitehost):
             if resource:
                 self.wait_for_job(job_id=resource["return"]["job_id"], state="Completed")
 
-        # return resource if resource else dict()
-        # return resource.get(self.resource_result_key_singular) if resource else dict()
-        
-        self.result[self.namespace] = self.transform_result(resource) # doesn't actually do anything, maybe delete this line?
         self.module.exit_json(**self.result)
 
     def upgrade(self):
@@ -303,28 +254,6 @@ class AnsibleSitehostServer(AnsibleSitehost):
         self.module.exit_json(**self.result)
 
 
-    # def update(self):
-        
-    #     # find the server that needs to be updated
-    #     server_to_update = self.get_server_by_name()
-
-
-    #     data=OrderedDict()
-
-    #     data["name"]=self.module.params.get("name")
-
-    #     if self.module.params.get("label"):
-    #         data["updates[label]"]=self.module.params.get("label")
-    #     if self.module.params.get("notes"):
-    #         data["updates[notes]"]=self.module.params.get("notes")
-    #     if self.module.params.get("kernal"):
-    #         data["updates[kernal]"]=self.module.params.get("kernal")
-    #     if self.module.params.get("partitions_threshold"):
-    #         data["updates[partitions][][threshold]"]=self.module.params.get("partitions_threshold")
-        
-
-    #     update_result = self.api_query(path = "/server/update.json", method="POST", data=data)
-    #     raise Exception(["debug",update_result])
         
 
     def create_or_update(self):
@@ -334,13 +263,6 @@ class AnsibleSitehostServer(AnsibleSitehost):
             self.create()
         else: # something is wrong with the code
             self.module.fail_json(msg="ERROR: no name or label given, exiting")
-        # resource = super(AnsibleSitehostServer, self).create_or_update()
-        #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
-        #     # Handle power status
-        #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
-        #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
-        #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
-        # return resource
     
     def present(self):
         self.create_or_update()

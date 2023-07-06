@@ -138,14 +138,6 @@ class AnsibleSitehost:
         # Hook custom configurations
         self.configure()
 
-    def configure(self):
-        pass
-
-    def transform_resource(self, resource):
-        """
-        Transforms (optional) the resource dict queried from the API
-        """
-        return resource
 
     def api_query(self, path, method="GET", data=OrderedDict(), query_params=None):
         """
@@ -202,76 +194,6 @@ class AnsibleSitehost:
             #fetch_url_info=info,
         )
 
-    def query_filter_list_by_name(
-        self,
-        path,
-        key_name,
-        result_key,
-        param_key=None,
-        key_id=None,
-        query_params=None,
-        get_details=False,
-        fail_not_found=False,
-        skip_transform=True,
-    ):
-        param_value = self.module.params.get(param_key or key_name)
-
-        found = dict()
-        for resource in self.query_list(path=path, result_key=result_key, query_params=query_params):
-            if resource.get(key_name) == param_value:
-                if found:
-                    self.module.fail_json(msg="More than one record with name=%s found. " "Use multiple=yes if module supports it." % param_value)
-                found = resource
-        if found:
-            if get_details:
-                return self.query_by_id(resource_id=found[key_id], skip_transform=skip_transform)
-            else:
-                if skip_transform:
-                    return found
-                else:
-                    return self.transform_resource(found)
-
-        elif fail_not_found:
-            self.module.fail_json(msg="No Resource %s with %s found: %s" % (path, key_name, param_value))
-
-        return dict()
-
-    def query_filter_list(self):
-        # Returns a single dict representing the resource query by name
-        return self.query_filter_list_by_name(
-            key_name=self.resource_key_name,
-            key_id=self.resource_key_id,
-            get_details=self.resource_get_details,
-            path=self.resource_path,
-            result_key=self.resource_result_key_plural,
-            skip_transform=False,
-        )
-
-    def query_by_id(self, resource_id=None, path=None, result_key=None, skip_transform=True):
-        # Defaults
-        path = path or self.resource_path
-        result_key = result_key or self.resource_result_key_singular
-
-        resource = self.api_query(path="%s%s" % (path, "/" + resource_id if resource_id else resource_id))
-        if resource:
-            if skip_transform:
-                return resource[result_key]
-            else:
-                return self.transform_resource(resource[result_key])
-
-        return dict()
-
-    def query(self):
-        # Returns a single dict representing the resource
-        return self.query_filter_list()
-
-    def query_list(self, path=None, result_key=None, query_params=None):
-        # Defaults
-        path = path or self.resource_path
-        result_key = result_key or self.resource_result_key_plural
-
-        resources = self.api_query(path=path, query_params=query_params)
-        return resources[result_key] if resources else []
 
     def wait_for_job(self, job_id, state = "Completed"):
         """
@@ -310,74 +232,6 @@ class AnsibleSitehost:
         time.sleep(delay)
     
     
-    # def create_or_update(self):
-    #     #resource = self.query()
-    #     #if not resource:
-    #     resource = self.create()
-    #     #else:
-    #         #resource = self.update(resource)
-    #     return resource
-
-    # def present(self):
-    #     self.get_result(self.create_or_update())
-
-    def is_diff(self, param, resource):
-        value = self.module.params.get(param)
-        if value is None:
-            return False
-
-        if param not in resource:
-            self.module.fail_json(msg="Can not diff, key %s not found in resource" % param)
-
-        if isinstance(value, list):
-            for v in value:
-                if v not in resource[param]:
-                    return True
-        elif resource[param] != value:
-            return True
-
-        return False
-
-    def update(self, resource):
-        data = dict()
-
-        for param in self.resource_update_param_keys:
-            if self.is_diff(param, resource):
-                self.result["changed"] = True
-                data[param] = self.module.params.get(param)
-
-        if self.result["changed"]:
-            self.result["diff"]["before"] = dict(**resource)
-            self.result["diff"]["after"] = dict(**resource)
-            self.result["diff"]["after"].update(data)
-
-            if not self.module.check_mode:
-                self.api_query(
-                    path="%s/%s" % (self.resource_path, resource[self.resource_key_id]),
-                    method=self.resource_update_method,
-                    data=data,
-                )
-                resource = self.query_by_id(resource_id=resource[self.resource_key_id])
-        return resource
-
-    # def absent(self):
-    #     resource = self.query()
-    #     if resource:
-    #         self.result["changed"] = True
-
-    #         self.result["diff"]["before"] = dict(**resource)
-    #         self.result["diff"]["after"] = dict()
-
-    #         if not self.module.check_mode:
-    #             self.api_query(
-    #                 path="%s/%s" % (self.resource_path, resource[self.resource_key_id]),
-    #                 method="DELETE",
-    #             )
-    #     self.get_result(resource)
-
-    def transform_result(self, resource):
-        return resource
-
     def get_result(self, resource):
         self.result[self.namespace] = self.transform_result(resource)
         self.module.exit_json(**self.result)
