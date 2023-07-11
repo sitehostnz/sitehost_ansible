@@ -63,68 +63,25 @@ def sitehost_argument_spec():
 
 
 class AnsibleSitehost:
-    def __init__(
-        self,
-        module,
-        namespace,
-        resource_path,
-        resource_result_key_singular,
-        resource_result_key_plural=None,
-        resource_key_name=None,
-        resource_key_id="id",
-        resource_get_details=False,
-        resource_create_param_keys=None,
-        resource_update_param_keys=None,
-        resource_update_method="PATCH",
-    ):
+    api_endpoint = "https://api.staging.sitehost.nz/1.2"
+
+    def __init__( self, module, namespace, api_key, api_client_id ):
 
         self.module = module
         self.namespace = namespace
-
-        # The API resource path e.g ssh_key
-        self.resource_result_key_singular = resource_result_key_singular
-
-        # The API result data key e.g ssh_keys
-        self.resource_result_key_plural = resource_result_key_plural or "%ss" % resource_result_key_singular
-
-        # The API resource path e.g /ssh-keys
-        self.resource_path = resource_path
-
-        # The API endpoint path e.g /provision.json
-        self.resource_endpoint = ""
-
-        # The name key of the resource, usually 'name'
-        self.resource_key_name = resource_key_name
-
-        # The name key of the resource, usually 'id'
-        self.resource_key_id = resource_key_id
-
-        # Some resources need an additional GET request to get all attributes
-        self.resource_get_details = resource_get_details
-
-        # List of params used to create the resource
-        self.resource_create_param_keys = resource_create_param_keys or OrderedDict()
-
-        # List of params used to update the resource
-        self.resource_update_param_keys = resource_update_param_keys or OrderedDict()
-
-        # Some resources have PUT, many have PATCH
-        self.resource_update_method = resource_update_method
+        self.api_key = api_key
+        self.api_client_id = api_client_id
 
         self.result = {
             "changed": False,
             namespace: dict(),
             "diff": dict(before=dict(), after=dict()),
             "sitehost_api": {
-                # "api_timeout": module.params["api_timeout"],
-                # "api_retries": module.params["api_retries"],
-                # "api_retry_max_delay": module.params["api_retry_max_delay"],
-                "api_endpoint": module.params["api_endpoint"],
+                "api_endpoint": AnsibleSitehost.api_endpoint,
             },
         }
 
         self.headers = {
-            # "Authorization": "Bearer %s" % self.module.params["api_key"],
             "User-Agent": SH_USER_AGENT,
             "Accept": "application/json",
         }
@@ -135,8 +92,6 @@ class AnsibleSitehost:
             msg='requests is required for this module.  Please run "pip install requests"',
         )
 
-        # Hook custom configurations
-        self.configure()
 
 
     def api_query(self, path, method="GET", data=OrderedDict(), query_params=None):
@@ -144,7 +99,7 @@ class AnsibleSitehost:
         low level function that directly make http rquest to the sitehost api
         
             Parameters:
-                path (str): should point to the api resource such as self.resource_path + apimethod
+                path (str): should point to the api resource such as "/server/provision.json"
                 method (str): defaults to "GET"
                 data (dict): payload to use when using methods like POST
                 query_params (dict): URL query string in dictionary form to use in methods like GET
@@ -154,25 +109,22 @@ class AnsibleSitehost:
 
         """
         # auth
-        query = "?apikey=%s&client_id=%s" % (self.module.params["api_key"], self.module.params["api_client_id"])
+        query = f"?apikey={self.api_key}&client_id={self.api_client_id}"
         if query_params:
             for k, v in query_params.items():
-                query += "&%s=%s" % (to_text(k), quote(to_text(v)))
+                query += f"&{to_text(k)}={quote(to_text(v))}"
 
         path += query
 
-        # if "provision" in path:
-        #     raise Exception(["debug",data, path])
-
         # used for setting the api key and client id if they are not set
-        data.setdefault("apikey",self.module.params["api_key"])
-        data.setdefault("client_id",self.module.params["api_client_id"])
+        data.setdefault("apikey",self.api_key)
+        data.setdefault("client_id",self.api_client_id)
         # move the apikey to front of body followed by client_id (order matters)
         data.move_to_end("client_id", last=False)
         data.move_to_end("apikey", last=False)
 
         r = requests.request(method, headers=self.headers,
-            url=self.module.params["api_endpoint"] + path,
+            url=AnsibleSitehost.api_endpoint + path,
             data=data
         )
 

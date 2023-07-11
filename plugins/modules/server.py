@@ -198,10 +198,10 @@ class AnsibleSitehostServer(AnsibleSitehost):
     def create(self):
         data = OrderedDict()
 
-        data["label"] = self.module.params.get("label")
-        data["location"] = self.module.params.get("location")
-        data["product_code"] = self.module.params.get("product_code")
-        data["image"] = self.module.params.get("image")
+        data["label"] = self.module.params["label"]
+        data["location"] = self.module.params["location"]
+        data["product_code"] = self.module.params["product_code"]
+        data["image"] = self.module.params["image"]
         data["params[ipv4]"] = "auto"
 
         self.result["changed"] = True
@@ -212,7 +212,7 @@ class AnsibleSitehostServer(AnsibleSitehost):
 
         if not self.module.check_mode:
             resource = self.api_query(
-                path="%s/provision.json" % (self.resource_path),
+                path="/server/provision.json",
                 method="POST",
                 data=data,
             )
@@ -282,11 +282,13 @@ class AnsibleSitehostServer(AnsibleSitehost):
         
 
         # get list of servers that potentially matches the user given server label
-        list_of_servers  = self.api_query(path = "/server/list_servers.json",query_params=OrderedDict([
-            ("filters[name]", server_label),
-            ("filters[sort_by]", sort_by),
-            ("filters[sort_dir]", "desc")
-        ]))["return"]["data"]
+        list_of_servers  = self.api_query(path = "/server/list_servers.json",
+            query_params=OrderedDict([
+                ("filters[name]", server_label),
+                ("filters[sort_by]", sort_by),
+                ("filters[sort_dir]", "desc")
+            ])
+        )["return"]["data"]
         
         # since sitehost api return all servers losely matching the given server label
         # this will filter out all servers that does not excatly match the given server label
@@ -312,7 +314,7 @@ def main():
             location=dict(type="str"),
             product_code=dict(type="str"),
             image=dict(type="str"),
-            ssh_keys=dict(type="list", elements="str", no_log=False),
+            # ssh_keys=dict(type="list", elements="str", no_log=False),
             state=dict(
                 choices=[
                     "present",
@@ -337,22 +339,11 @@ def main():
     sitehost = AnsibleSitehostServer(
         module=module,
         namespace="sitehost_server",
-        resource_path="/server",
-        resource_result_key_singular="return",
-        resource_create_param_keys=[
-            "label",
-            "location",
-            "product_code",
-            "image",
-            "ssh_keys",
-        ],
-        resource_update_param_keys=[
-            "product_code",
-        ],
-        resource_key_name="label",
+        api_key=module.params["api_key"],
+        api_client_id=module.params["api_client_id"]
     )
 
-    state = module.params.get("state")  # type: ignore
+    state = module.params["state"]  # type: ignore
 
     if state == "absent":
         sitehost.absent()
