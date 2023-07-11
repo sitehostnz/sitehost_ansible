@@ -6,20 +6,23 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+import traceback
 import random
 import time
 from collections import OrderedDict
 from ansible.errors import AnsibleError
 from ansible.module_utils._text import to_text
-from ansible.module_utils.basic import env_fallback
+from ansible.module_utils.basic import env_fallback, missing_required_lib
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.urls import fetch_url, prepare_multipart
+
 
 try:
     import requests
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
+    LIB_REQ_ERR = traceback.format_exc()
 
 SH_USER_AGENT = "Ansible SiteHost"
 
@@ -89,8 +92,13 @@ class AnsibleSitehost:
         # Check if the requests package is installed
         if not REQUESTS_AVAILABLE:
             self.module.fail_json(
-            msg='requests is required for this module.  Please run "pip install requests"',
-        )
+                msg=missing_required_lib(
+                    library="requests",
+                    url="https://pypi.org/project/requests/",
+                    reason="because it is required for accessing the sitehost api",
+                ),
+                exception = LIB_REQ_ERR
+            )
 
 
 
@@ -142,8 +150,9 @@ class AnsibleSitehost:
             return dict()
 
         self.module.fail_json(
-            msg='Failure while calling the SiteHost API with %s for "%s". With message: %s' % (method, path,json_r["msg"]),
-            #fetch_url_info=info,
+            msg=(f'Failure while calling the SiteHost API with {method} for "{path}".'
+                f' With message: {json_r["msg"]}'),
+            error_code=r.status_code
         )
 
 
