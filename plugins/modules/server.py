@@ -164,10 +164,14 @@ class AnsibleSitehostServer:
 
     def handle_power_status(self):
         """this handles starting, stopping, and restarting servers"""
+        # check if the server exist
+        if not self.get_server_by_name():
+            self.module.fail_json(msg="ERROR: server does not exist.")
+
         requested_server_state = self.module.params.get("state")
-        if (
-            requested_server_state == "restarted"
-        ):  # always restart server when requested
+
+        # always restart server when requested
+        if ( requested_server_state == "restarted" ):
             body = OrderedDict()
             body["name"] = self.module.params.get("name")
             body["state"] = "reboot"
@@ -181,61 +185,46 @@ class AnsibleSitehostServer:
             )
             self.module.exit_json(changed=True, job_status=restart_job)
 
-        else:  # it is not a restarted state, check if it needs to turn server on or off
-            current_server_state = self.sh_api.api_query(
-                path="/server/get_state.json",
-                query_params={"name": self.module.params.get("name")},
-            )["return"]["state"]
+        
+        current_server_state = self.sh_api.api_query(
+            path="/server/get_state.json",
+            query_params={"name": self.module.params.get("name")},
+        )["return"]["state"]
 
-            if (
-                current_server_state == "On" and requested_server_state == "started"
-            ):  # check if the server is on
-                self.module.exit_json(
-                    skipped=True,
-                    msg="server already started, skipped task",
-                    **self.result
-                )
-            elif (
-                current_server_state == "Off" and requested_server_state == "stopped"
-            ):  # check if server is off
-                self.module.exit_json(
-                    skipped=True,
-                    msg="server already stopped, skipped task",
-                    **self.result
-                )
-            else:  # the server state is different from requetsed state, start/stop server
-                if requested_server_state == "started":  # start server up
-                    body = OrderedDict()
-                    body["name"] = self.module.params.get("name")
-                    body["state"] = "power_on"
+        server_state_map = {
+            "On": "started",
+            "Off": "stopped",
+        }
 
-                    startjob = self.sh_api.api_query(
-                        path="/server/change_state.json", method="POST", data=body
-                    )
-                    startresult = self.sh_api.wait_for_job(
-                        job_id=startjob["return"]["job_id"]
-                    )
-
-                    self.module.exit_json(changed=True, job_status=startresult)
-
-                elif requested_server_state == "stopped":  # stop the server
-                    body = OrderedDict()
-                    body["name"] = self.module.params.get("name")
-                    body["state"] = "power_off"
-
-                    offjob = self.sh_api.api_query(
-                        path="/server/change_state.json", method="POST", data=body
-                    )
-                    offresult = self.sh_api.wait_for_job(
-                        job_id=offjob["return"]["job_id"]
-                    )
-
-                    self.module.exit_json(changed=True, job_status=offresult)
-            self.module.fail_json(
-                msg="an unexpected error occured",
-                requested_state=requested_server_state,
-                current_server_state=current_server_state,
+        # if server is the requested state already, skip task
+        if (server_state_map[current_server_state] == requested_server_state):
+            self.module.exit_json(
+                skipped=True,
+                msg=f"server already {server_state_map[current_server_state]}, skipped task",
+                **self.result
             )
+
+        else:  # the server state is different from requested state, start/stop server
+            body = OrderedDict()
+            body["name"] = self.module.params.get("name")
+            body["state"] = "power_on" if requested_server_state == "started" else "power_off"  # noqa: E501
+
+            startjob = self.sh_api.api_query(
+                path="/server/change_state.json", method="POST", data=body
+            )
+            startresult = self.sh_api.wait_for_job(
+                job_id=startjob["return"]["job_id"]
+            )
+
+            self.module.exit_json(changed=True, job_status=startresult)
+            pass
+            
+        
+        self.module.fail_json(
+            msg="an unexpected error occured",
+            requested_state=requested_server_state,
+            current_server_state=current_server_state,
+        )
 
     def create(self):
         data = OrderedDict()
@@ -275,7 +264,7 @@ class AnsibleSitehostServer:
         # check if the server exist
         if not server_to_upgrade:
             self.module.fail_json(
-                msg="Server does not exist."
+                msg="ERROR: Server does not exist."
             )
 
         # check if server plan is same as inputed product code
