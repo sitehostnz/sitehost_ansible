@@ -4,12 +4,6 @@
 
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
-
-from ansible.module_utils.basic import AnsibleModule
-
-from ..module_utils.shpy import SitehostAPI, sitehost_argument_spec
-
 __metaclass__ = type
 
 
@@ -119,11 +113,15 @@ sitehost_instance:
           sample: "11353"
 """
 
+from collections import OrderedDict  # noqa: E402
 
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+
+from ..module_utils.shpy import SitehostAPI, sitehost_argument_spec  # noqa: E402
 
 
 class AnsibleSitehostServer:
-    def __init__(self,module,api):
+    def __init__(self, module, api):
         self.sh_api = api
         self.module = module
         self.result = {
@@ -134,7 +132,7 @@ class AnsibleSitehostServer:
                 "api_endpoint": SitehostAPI.api_endpoint,
             },
         }
-        
+
     def absent(self):
         """deletes a server
         Overloading parent class method as a test right now
@@ -178,7 +176,9 @@ class AnsibleSitehostServer:
                 path="/server/change_state.json", method="POST", data=body
             )
 
-            restart_job = self.sh_api.wait_for_job(job_id=restart_result["return"]["job_id"])
+            restart_job = self.sh_api.wait_for_job(
+                job_id=restart_result["return"]["job_id"]
+            )
             self.module.exit_json(changed=True, job_status=restart_job)
 
         else:  # it is not a restarted state, check if it needs to turn server on or off
@@ -212,7 +212,9 @@ class AnsibleSitehostServer:
                     startjob = self.sh_api.api_query(
                         path="/server/change_state.json", method="POST", data=body
                     )
-                    startresult = self.sh_api.wait_for_job(job_id=startjob["return"]["job_id"])
+                    startresult = self.sh_api.wait_for_job(
+                        job_id=startjob["return"]["job_id"]
+                    )
 
                     self.module.exit_json(changed=True, job_status=startresult)
 
@@ -224,7 +226,9 @@ class AnsibleSitehostServer:
                     offjob = self.sh_api.api_query(
                         path="/server/change_state.json", method="POST", data=body
                     )
-                    offresult = self.sh_api.wait_for_job(job_id=offjob["return"]["job_id"])
+                    offresult = self.sh_api.wait_for_job(
+                        job_id=offjob["return"]["job_id"]
+                    )
 
                     self.module.exit_json(changed=True, job_status=offresult)
             self.module.fail_json(
@@ -268,9 +272,14 @@ class AnsibleSitehostServer:
         It will first stage the upgrade then commit the upgrade with the api, restarts server
         """
         server_to_upgrade = self.get_server_by_name()
-        if server_to_upgrade["product_code"] == self.module.params.get(
-            "product_code"
-        ):  # check if server plan is same as inputed product code
+        # check if the server exist
+        if not server_to_upgrade:
+            self.module.fail_json(
+                msg="Server does not exist."
+            )
+
+        # check if server plan is same as inputed product code
+        if server_to_upgrade["product_code"] == self.module.params["product_code"]:
             self.module.exit_json(
                 skipped=True,
                 msg="Requested product is the same as current server product, skipping.",
@@ -313,10 +322,10 @@ class AnsibleSitehostServer:
 
     def get_servers_by_label(self, server_label=None, sort_by="created"):
         """
-        uses sitehost api to return all servers excatly matching the server label given 
+        uses sitehost api to return all servers excatly matching the server label given
         in the module argument
 
-        :param sort_by: defaults to "created", use to to set how the server is sorted. 
+        :param sort_by: defaults to "created", use to to set how the server is sorted.
         example: "state", "maint_date", "name"
         """
         if server_label is None:
@@ -389,7 +398,7 @@ def main():
         api_client_id=module.params["api_client_id"],
     )
 
-    sitehostserver = AnsibleSitehostServer(module=module,api=sitehost_api)
+    sitehostserver = AnsibleSitehostServer(module=module, api=sitehost_api)
 
     state = module.params["state"]  # type: ignore
 

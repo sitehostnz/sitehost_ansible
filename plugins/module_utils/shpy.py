@@ -10,11 +10,9 @@ import traceback
 import random
 import time
 from collections import OrderedDict
-from ansible.errors import AnsibleError
 from ansible.module_utils._text import to_text
 from ansible.module_utils.basic import env_fallback, missing_required_lib
 from ansible.module_utils.six.moves.urllib.parse import quote
-from ansible.module_utils.urls import fetch_url, prepare_multipart
 
 
 try:
@@ -110,7 +108,7 @@ class SitehostAPI:
 
         # Success with content
         if r.status_code in (200, 201, 202):
-            if json_r["status"] == False:
+            if json_r["status"] is False:
                 self.module.fail_json(**json_r, apiquery={"path": path, "body": data})
 
             return self.module.from_json(to_text(r.text, errors="surrogate_or_strict"))
@@ -149,13 +147,11 @@ class SitehostAPI:
                     "return"
                 ]  # return information on job details when it succeded
             elif job_status == "Failed":
-                self.module.fail_json(msg="Job %s failed" % (job_id))
+                self.module.fail_json(msg=f"Job {job_id} failed")
 
             SitehostAPI._backoff(retry=retry)
         else:
-            self.module.fail_json(
-                msg="Wait for %s to become %s timed out" % (job_id, state)
-            )
+            self.module.fail_json( msg=f"Wait for {job_id} to become {state} timed out")
 
     @staticmethod
     def _backoff(retry, retry_max_delay=12):
