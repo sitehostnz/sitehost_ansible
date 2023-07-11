@@ -4,6 +4,12 @@
 
 from __future__ import absolute_import, division, print_function
 
+from collections import OrderedDict
+
+from ansible.module_utils.basic import AnsibleModule
+
+from ..module_utils.shpy import SitehostAPI, sitehost_argument_spec
+
 __metaclass__ = type
 
 
@@ -113,87 +119,119 @@ sitehost_instance:
           sample: "11353"
 """
 
-from collections import OrderedDict
-
-from ansible.module_utils.basic import AnsibleModule
-
-from ..module_utils.shpy import AnsibleSitehost, sitehost_argument_spec
 
 
-class AnsibleSitehostServer(AnsibleSitehost):
 
+class AnsibleSitehostServer:
+    def __init__(self,module,api):
+        self.sh_api = api
+        self.module = module
+        self.result = {
+            "changed": False,
+            "sitehost_server": dict(),
+            "diff": dict(before=dict(), after=dict()),
+            "sitehost_api": {
+                "api_endpoint": SitehostAPI.api_endpoint,
+            },
+        }
+        
     def absent(self):
         """deletes a server
         Overloading parent class method as a test right now
         """
         server_to_delete = self.get_server_by_name()
 
-        if server_to_delete: # server exist, deleting newest server
-            deleteresult = self.api_query(path = "/server/delete.json", query_params={
-                "name":server_to_delete["name"]
-            })
+        if server_to_delete:  # server exist, deleting server
+            deleteresult = self.sh_api.api_query(
+                path="/server/delete.json",
+                query_params={"name": server_to_delete["name"]},
+            )
 
-            delete_job_result=self.wait_for_job(job_id=deleteresult["return"]["job_id"]) # pause execution until the server is fully deleted
+            delete_job_result = self.sh_api.wait_for_job(
+                job_id=deleteresult["return"]["job_id"]
+            )  # pause execution until the server is fully deleted
 
             self.result["changed"] = True
 
             self.result["diff"]["before"] = server_to_delete
             self.result["diff"]["after"] = delete_job_result
-            self.result["message"]=delete_job_result["message"]
+            self.result["message"] = delete_job_result["message"]
 
             self.module.exit_json(**self.result)
         else:  # server does not exist, so just skip and continue
             self.result["skipped"] = True
-            self.module.exit_json(msg="Server does not exist, skipping task.",**self.result)
-
+            self.module.exit_json(
+                msg="Server does not exist, skipping task.", **self.result
+            )
 
     def handle_power_status(self):
         """this handles starting, stopping, and restarting servers"""
         requested_server_state = self.module.params.get("state")
-        if requested_server_state == "restarted":  # always restart server when requested
-            
+        if (
+            requested_server_state == "restarted"
+        ):  # always restart server when requested
             body = OrderedDict()
-            body["name"]=self.module.params.get("name")
-            body["state"]="reboot"
+            body["name"] = self.module.params.get("name")
+            body["state"] = "reboot"
 
-            restart_result=self.api_query(path="/server/change_state.json", method="POST", data=body )
+            restart_result = self.sh_api.api_query(
+                path="/server/change_state.json", method="POST", data=body
+            )
 
-            restart_job=self.wait_for_job(job_id=restart_result["return"]["job_id"])
-            self.module.exit_json(changed=True, job_status= restart_job)
-        
+            restart_job = self.sh_api.wait_for_job(job_id=restart_result["return"]["job_id"])
+            self.module.exit_json(changed=True, job_status=restart_job)
+
         else:  # it is not a restarted state, check if it needs to turn server on or off
-            current_server_state = self.api_query(path="/server/get_state.json", query_params={
-                "name":self.module.params.get("name")
-            })["return"]["state"]
+            current_server_state = self.sh_api.api_query(
+                path="/server/get_state.json",
+                query_params={"name": self.module.params.get("name")},
+            )["return"]["state"]
 
-            if (current_server_state == "On" and requested_server_state == "started"):  # check if the server is on
-                self.module.exit_json(skipped=True, msg="server already started, skipped task", **self.result)
-            elif (current_server_state == "Off" and requested_server_state == "stopped"):  # check if server is off
-                self.module.exit_json(skipped=True, msg="server already stopped, skipped task", **self.result)
+            if (
+                current_server_state == "On" and requested_server_state == "started"
+            ):  # check if the server is on
+                self.module.exit_json(
+                    skipped=True,
+                    msg="server already started, skipped task",
+                    **self.result
+                )
+            elif (
+                current_server_state == "Off" and requested_server_state == "stopped"
+            ):  # check if server is off
+                self.module.exit_json(
+                    skipped=True,
+                    msg="server already stopped, skipped task",
+                    **self.result
+                )
             else:  # the server state is different from requetsed state, start/stop server
-                if(requested_server_state == "started"):  # start server up
-                    body=OrderedDict()
-                    body["name"]=self.module.params.get("name")
-                    body["state"]="power_on"
+                if requested_server_state == "started":  # start server up
+                    body = OrderedDict()
+                    body["name"] = self.module.params.get("name")
+                    body["state"] = "power_on"
 
-                    startjob=self.api_query(path="/server/change_state.json", method="POST", data=body)
-                    startresult=self.wait_for_job(job_id=startjob["return"]["job_id"])
+                    startjob = self.sh_api.api_query(
+                        path="/server/change_state.json", method="POST", data=body
+                    )
+                    startresult = self.sh_api.wait_for_job(job_id=startjob["return"]["job_id"])
 
-                    self.module.exit_json(changed=True,job_status=startresult)
+                    self.module.exit_json(changed=True, job_status=startresult)
 
-                elif(requested_server_state == "stopped"):  # stop the server
-                    body=OrderedDict()
-                    body["name"]=self.module.params.get("name")
-                    body["state"]="power_off"
+                elif requested_server_state == "stopped":  # stop the server
+                    body = OrderedDict()
+                    body["name"] = self.module.params.get("name")
+                    body["state"] = "power_off"
 
-                    offjob=self.api_query(path="/server/change_state.json", method="POST", data=body)
-                    offresult=self.wait_for_job(job_id=offjob["return"]["job_id"])
+                    offjob = self.sh_api.api_query(
+                        path="/server/change_state.json", method="POST", data=body
+                    )
+                    offresult = self.sh_api.wait_for_job(job_id=offjob["return"]["job_id"])
 
-                    self.module.exit_json(changed=True,job_status=offresult)
-            self.module.fail_json(msg="an unexpected error occured", requested_state = requested_server_state, current_server_state = current_server_state)
-
-                
-
+                    self.module.exit_json(changed=True, job_status=offresult)
+            self.module.fail_json(
+                msg="an unexpected error occured",
+                requested_state=requested_server_state,
+                current_server_state=current_server_state,
+            )
 
     def create(self):
         data = OrderedDict()
@@ -211,14 +249,16 @@ class AnsibleSitehostServer(AnsibleSitehost):
         self.result["diff"]["after"] = data
 
         if not self.module.check_mode:
-            resource = self.api_query(
+            resource = self.sh_api.api_query(
                 path="/server/provision.json",
                 method="POST",
                 data=data,
             )
 
             if resource:
-                self.wait_for_job(job_id=resource["return"]["job_id"], state="Completed")
+                self.sh_api.wait_for_job(
+                    job_id=resource["return"]["job_id"], state="Completed"
+                )
 
         self.module.exit_json(**self.result)
 
@@ -228,20 +268,28 @@ class AnsibleSitehostServer(AnsibleSitehost):
         It will first stage the upgrade then commit the upgrade with the api, restarts server
         """
         server_to_upgrade = self.get_server_by_name()
-        if(server_to_upgrade["product_code"] == self.module.params.get("product_code")):  # check if server plan is same as inputed product code
-            self.module.exit_json(skipped=True, msg="Requested product is the same as current server product, skipping.")
-        
-        
-        body = OrderedDict()
-        body["name"]=self.module.params.get("name")
-        body["plan"]=self.module.params.get("product_code")
-        self.api_query(path="/server/upgrade_plan.json", method="POST", data=body)  # stage server upgrade
-        
-        body = OrderedDict()
-        body["name"]=self.module.params.get("name")
-        upgrade_job = self.api_query(path="/server/commit_disk_changes.json", method="POST", data=body)  # commit upgrade, will restart server
+        if server_to_upgrade["product_code"] == self.module.params.get(
+            "product_code"
+        ):  # check if server plan is same as inputed product code
+            self.module.exit_json(
+                skipped=True,
+                msg="Requested product is the same as current server product, skipping.",
+            )
 
-        job_result=self.wait_for_job(upgrade_job["return"]["job_id"])
+        body = OrderedDict()
+        body["name"] = self.module.params.get("name")
+        body["plan"] = self.module.params.get("product_code")
+        self.sh_api.api_query(
+            path="/server/upgrade_plan.json", method="POST", data=body
+        )  # stage server upgrade
+
+        body = OrderedDict()
+        body["name"] = self.module.params.get("name")
+        upgrade_job = self.sh_api.api_query(
+            path="/server/commit_disk_changes.json", method="POST", data=body
+        )  # commit upgrade, will restart server
+
+        job_result = self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
 
         server_after_upgrade = self.get_server_by_name()
 
@@ -253,57 +301,57 @@ class AnsibleSitehostServer(AnsibleSitehost):
 
         self.module.exit_json(**self.result)
 
-
-        
-
     def create_or_update(self):
-        if self.module.params.get("name"): # if server name exist, upgrade the server
+        if self.module.params.get("name"):  # if server name exist, upgrade the server
             self.upgrade()
-        elif self.module.params.get("label"): # else if label only, create the new server
+        elif self.module.params.get(
+            "label"
+        ):  # else if label only, create the new server
             self.create()
-        else: # something is wrong with the code
+        else:  # something is wrong with the code
             self.module.fail_json(msg="ERROR: no name or label given, exiting")
-    
-    def present(self):
-        self.create_or_update()
 
-    def transform_result(self, resource):
-        """currently does nothing"""
-        return resource
-    
-    def get_servers_by_label(self, server_label=None, sort_by = "created"):
+    def get_servers_by_label(self, server_label=None, sort_by="created"):
         """
-        uses sitehost api to return all servers excatly matching the server label given in the module argument
+        uses sitehost api to return all servers excatly matching the server label given 
+        in the module argument
 
-        :param sort_by: defaults to "created", use to to set how the server is sorted. example: "state", "maint_date", "name"
+        :param sort_by: defaults to "created", use to to set how the server is sorted. 
+        example: "state", "maint_date", "name"
         """
         if server_label is None:
-            server_label = self.module.params.get("label") # get the server label user given
-        
+            server_label = self.module.params.get(
+                "label"
+            )  # get the server label user given
 
         # get list of servers that potentially matches the user given server label
-        list_of_servers  = self.api_query(path = "/server/list_servers.json",
-            query_params=OrderedDict([
-                ("filters[name]", server_label),
-                ("filters[sort_by]", sort_by),
-                ("filters[sort_dir]", "desc")
-            ])
+        list_of_server = self.sh_api.api_query(
+            path="/server/list_servers.json",
+            query_params=OrderedDict(
+                [
+                    ("filters[name]", server_label),
+                    ("filters[sort_by]", sort_by),
+                    ("filters[sort_dir]", "desc"),
+                ]
+            ),
         )["return"]["data"]
-        
+
         # since sitehost api return all servers losely matching the given server label
         # this will filter out all servers that does not excatly match the given server label
-        list_of_servers = list(filter(lambda x:x["label"]==server_label, list_of_servers))
+        list_of_server = [s for s in list_of_server if s["label"] == server_label]
 
-        return list_of_servers
-    
+        return list_of_server
+
     def get_server_by_name(self, server_name=None):
         """return a server by its server name"""
         if server_name is None:
             server_name = self.module.params.get("name")
 
-        return self.api_query(path = "/server/get_server.json", query_params=OrderedDict({
-          "name":server_name
-      }))["return"]
+        return self.sh_api.api_query(
+            path="/server/get_server.json",
+            query_params=OrderedDict({"name": server_name}),
+        )["return"]
+
 
 def main():
     argument_spec = sitehost_argument_spec()
@@ -326,7 +374,6 @@ def main():
                 default="present",
             ),
             notes=dict(type="str"),
-            
         )  # type: ignore
     )
 
@@ -336,21 +383,23 @@ def main():
         supports_check_mode=True,
     )
 
-    sitehost = AnsibleSitehostServer(
+    sitehost_api = SitehostAPI(
         module=module,
-        namespace="sitehost_server",
         api_key=module.params["api_key"],
-        api_client_id=module.params["api_client_id"]
+        api_client_id=module.params["api_client_id"],
     )
+
+    sitehostserver = AnsibleSitehostServer(module=module,api=sitehost_api)
 
     state = module.params["state"]  # type: ignore
 
     if state == "absent":
-        sitehost.absent()
+        sitehostserver.absent()
     elif state == "present":
-        sitehost.present()
+        sitehostserver.create_or_update()
     else:
-        sitehost.handle_power_status()
+        sitehostserver.handle_power_status()
+
 
 if __name__ == "__main__":
     main()
