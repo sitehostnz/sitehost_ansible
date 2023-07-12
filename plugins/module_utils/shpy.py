@@ -26,26 +26,6 @@ except ImportError:
 SH_USER_AGENT = "Ansible SiteHost"
 
 
-def sitehost_argument_spec():
-    return dict(
-        api_endpoint=dict(
-            type="str",
-            fallback=(env_fallback, ["SH_API_ENDPOINT"]),
-            default="https://api.staging.sitehost.nz/1.2",
-        ),
-        api_key=dict(
-            type="str",
-            fallback=(env_fallback, ["SH_API_KEY"]),
-            no_log=True,
-            required=True,
-        ),
-        api_client_id=dict(
-            type="str",
-            fallback=(env_fallback, ["SH_CLIENT_ID"]),
-            required=True,
-        ),
-    )
-
 
 class SitehostAPI:
     api_endpoint = "https://api.staging.sitehost.nz/1.2"
@@ -166,3 +146,25 @@ class SitehostAPI:
         if delay > retry_max_delay:
             delay = retry_max_delay + randomness
         time.sleep(delay)
+
+    @staticmethod
+    def sitehost_argument_spec():
+        return dict(
+            api_endpoint=dict(
+                type="str",
+                fallback=(env_fallback, ["SH_API_ENDPOINT"]),
+                default="https://api.staging.sitehost.nz/1.2",
+            ),
+            api_key=dict(
+                type="str",
+                fallback=(env_fallback, ["SH_API_KEY"]),
+                no_log=True,
+                required=True,
+            ),
+            api_client_id=dict(
+                type="str",
+                fallback=(env_fallback, ["SH_CLIENT_ID"]),
+                required=True,
+            ),
+        )
+

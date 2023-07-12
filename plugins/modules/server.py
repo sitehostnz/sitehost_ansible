@@ -117,7 +117,7 @@ from collections import OrderedDict  # noqa: E402
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
-from ..module_utils.shpy import SitehostAPI, sitehost_argument_spec  # noqa: E402
+from ..module_utils.shpy import SitehostAPI  # noqa: E402
 
 
 class AnsibleSitehostServer:
@@ -353,7 +353,7 @@ class AnsibleSitehostServer:
 
 
 def main():
-    argument_spec = sitehost_argument_spec()
+    argument_spec = SitehostAPI.sitehost_argument_spec()
     argument_spec.update(
         dict(
             label=dict(type="str"),
