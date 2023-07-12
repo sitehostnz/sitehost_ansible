@@ -139,28 +139,29 @@ class AnsibleSitehostServer:
         """
         server_to_delete = self.get_server_by_name()
 
-        if server_to_delete:  # server exist, deleting server
-            deleteresult = self.sh_api.api_query(
-                path="/server/delete.json",
-                query_params={"name": server_to_delete["name"]},
-            )
-
-            delete_job_result = self.sh_api.wait_for_job(
-                job_id=deleteresult["return"]["job_id"]
-            )  # pause execution until the server is fully deleted
-
-            self.result["changed"] = True
-
-            self.result["diff"]["before"] = server_to_delete
-            self.result["diff"]["after"] = delete_job_result
-            self.result["message"] = delete_job_result["message"]
-
-            self.module.exit_json(**self.result)
-        else:  # server does not exist, so just skip and continue
+        if not server_to_delete: # server does not exist, so just skip and continue
             self.result["skipped"] = True
             self.module.exit_json(
                 msg="Server does not exist, skipping task.", **self.result
             )
+        
+        deleteresult = self.sh_api.api_query(
+            path="/server/delete.json",
+            query_params={"name": server_to_delete["name"]},
+        )
+
+        delete_job_result = self.sh_api.wait_for_job(
+            job_id=deleteresult["return"]["job_id"]
+        )  # pause execution until the server is fully deleted
+
+        self.result["changed"] = True
+
+        self.result["diff"]["before"] = server_to_delete
+        self.result["diff"]["after"] = delete_job_result
+        self.result["message"] = delete_job_result["message"]
+
+        self.module.exit_json(**self.result)
+
 
     def handle_power_status(self):
         """this handles starting, stopping, and restarting servers"""

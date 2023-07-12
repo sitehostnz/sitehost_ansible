@@ -155,7 +155,12 @@ class SitehostAPI:
 
     @staticmethod
     def _backoff(retry, retry_max_delay=12):
-        """randomly pause the computation base on number of retries"""
+        """pause the computation for some time, based on the number of retries
+        retries are kept track by the parent wait_for_job() function
+        
+        Basically with every iteration of retry, the function will wait alittle longer 
+        until it waits for a max of retry_max_delay seconds.
+        """
         randomness = random.randint(0, 1000) / 1000.0
         delay = 2**retry + randomness
         if delay > retry_max_delay:
