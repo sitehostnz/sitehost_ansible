@@ -205,27 +205,20 @@ class AnsibleSitehostServer:
                 **self.result
             )
 
-        else:  # the server state is different from requested state, start/stop server
-            body = OrderedDict()
-            body["name"] = self.module.params.get("name")
-            body["state"] = "power_on" if requested_server_state == "started" else "power_off"  # noqa: E501
+        # the server state is different from requested state, start/stop server
+        body = OrderedDict()
+        body["name"] = self.module.params.get("name")
+        body["state"] = "power_on" if requested_server_state == "started" else "power_off"  # noqa: E501
 
-            startjob = self.sh_api.api_query(
-                path="/server/change_state.json", method="POST", data=body
-            )
-            startresult = self.sh_api.wait_for_job(
-                job_id=startjob["return"]["job_id"]
-            )
-
-            self.module.exit_json(changed=True, job_status=startresult)
-            pass
-            
-        
-        self.module.fail_json(
-            msg="an unexpected error occured",
-            requested_state=requested_server_state,
-            current_server_state=current_server_state,
+        startjob = self.sh_api.api_query(
+            path="/server/change_state.json", method="POST", data=body
         )
+        startresult = self.sh_api.wait_for_job(
+            job_id=startjob["return"]["job_id"]
+        )
+
+        self.module.exit_json(changed=True, job_status=startresult)
+        
 
     def create(self):
         data = OrderedDict()
