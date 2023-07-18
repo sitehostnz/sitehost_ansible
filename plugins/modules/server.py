@@ -139,20 +139,24 @@ class AnsibleSitehostServer:
         """
         server_to_delete = self.get_server_by_name()
 
-        if not server_to_delete: # server does not exist, so just skip and continue
+        if not server_to_delete:  # server does not exist, so just skip and continue
             self.result["skipped"] = True
             self.module.exit_json(
                 msg="Server does not exist, skipping task.", **self.result
             )
-        
+
+        body = OrderedDict()
+        body["name"] = server_to_delete["name"]
         deleteresult = self.sh_api.api_query(
             path="/server/delete.json",
-            query_params={"name": server_to_delete["name"]},
+            method="POST",
+            data=body,
         )
 
+        # pause execution until the server is fully deleted
         delete_job_result = self.sh_api.wait_for_job(
             job_id=deleteresult["return"]["job_id"]
-        )  # pause execution until the server is fully deleted
+        )
 
         self.result["changed"] = True
 
@@ -161,7 +165,6 @@ class AnsibleSitehostServer:
         self.result["message"] = delete_job_result["message"]
 
         self.module.exit_json(**self.result)
-
 
     def handle_power_status(self):
         """this handles starting, stopping, and restarting servers"""
@@ -172,7 +175,7 @@ class AnsibleSitehostServer:
         requested_server_state = self.module.params.get("state")
 
         # always restart server when requested
-        if ( requested_server_state == "restarted" ):
+        if requested_server_state == "restarted":
             body = OrderedDict()
             body["name"] = self.module.params.get("name")
             body["state"] = "reboot"
@@ -186,7 +189,6 @@ class AnsibleSitehostServer:
             )
             self.module.exit_json(changed=True, job_status=restart_job)
 
-        
         current_server_state = self.sh_api.api_query(
             path="/server/get_state.json",
             query_params={"name": self.module.params.get("name")},
@@ -198,50 +200,54 @@ class AnsibleSitehostServer:
         }
 
         # if server is the requested state already, skip task
-        if (server_state_map[current_server_state] == requested_server_state):
+        if server_state_map[current_server_state] == requested_server_state:
             self.module.exit_json(
                 skipped=True,
                 msg=f"server already {server_state_map[current_server_state]}, skipped task",
-                **self.result
+                **self.result,
             )
 
         # the server state is different from requested state, start/stop server
         body = OrderedDict()
         body["name"] = self.module.params.get("name")
-        body["state"] = "power_on" if requested_server_state == "started" else "power_off"  # noqa: E501
+        body["state"] = (
+            "power_on" if requested_server_state == "started" else "power_off"
+        )
 
         startjob = self.sh_api.api_query(
             path="/server/change_state.json", method="POST", data=body
         )
-        startresult = self.sh_api.wait_for_job(
-            job_id=startjob["return"]["job_id"]
-        )
+        startresult = self.sh_api.wait_for_job(job_id=startjob["return"]["job_id"])
 
         self.module.exit_json(changed=True, job_status=startresult)
-        
 
     def create(self):
-        data = OrderedDict()
+        """provisions a new server"""
+        body = OrderedDict()
 
-        data["label"] = self.module.params["label"]
-        data["location"] = self.module.params["location"]
-        data["product_code"] = self.module.params["product_code"]
-        data["image"] = self.module.params["image"]
-        data["params[ipv4]"] = "auto"
+        body["label"] = self.module.params["label"]
+        body["location"] = self.module.params["location"]
+        body["product_code"] = self.module.params["product_code"]
+        body["image"] = self.module.params["image"]
+        body["params[ipv4]"] = "auto"
 
         self.result["changed"] = True
         resource = dict()
 
         self.result["diff"]["before"] = dict()
-        self.result["diff"]["after"] = data
+        self.result["diff"]["after"] = body
+
+        
 
         if not self.module.check_mode:
             resource = self.sh_api.api_query(
                 path="/server/provision.json",
                 method="POST",
-                data=data,
+                data=body,
             )
 
+            self.result["sitehost_server"]=resource
+            
             if resource:
                 self.sh_api.wait_for_job(
                     job_id=resource["return"]["job_id"], state="Completed"
@@ -257,9 +263,7 @@ class AnsibleSitehostServer:
         server_to_upgrade = self.get_server_by_name()
         # check if the server exist
         if not server_to_upgrade:
-            self.module.fail_json(
-                msg="ERROR: Server does not exist."
-            )
+            self.module.fail_json(msg="ERROR: Server does not exist.")
 
         # check if server plan is same as inputed product code
         if server_to_upgrade["product_code"] == self.module.params["product_code"]:
@@ -331,7 +335,8 @@ class AnsibleSitehostServer:
         )["return"]["data"]
 
         # since sitehost api return all servers losely matching the given server label
-        # this will filter out all servers that does not excatly match the given server label
+        # this will filter out all servers that does not excatly
+        # match the given server label
         list_of_server = [s for s in list_of_server if s["label"] == server_label]
 
         return list_of_server
@@ -356,7 +361,6 @@ def main():
             location=dict(type="str"),
             product_code=dict(type="str"),
             image=dict(type="str"),
-            # ssh_keys=dict(type="list", elements="str", no_log=False),
             state=dict(
                 choices=[
                     "present",

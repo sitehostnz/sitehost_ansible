@@ -26,9 +26,7 @@ except ImportError:
 SH_USER_AGENT = "Ansible SiteHost"
 
 
-
 class SitehostAPI:
-
     def __init__(self, module, api_key, api_client_id):
         self.module = module
         self.api_key = api_key
@@ -80,7 +78,10 @@ class SitehostAPI:
         data.move_to_end("apikey", last=False)
 
         r = requests.request(
-            method, headers=self.headers, url=self.module.params["api_endpoint"] + path, data=data
+            method,
+            headers=self.headers,
+            url=self.module.params["api_endpoint"] + path,
+            data=data,
         )
 
         json_r = r.json()
@@ -130,14 +131,14 @@ class SitehostAPI:
 
             SitehostAPI._backoff(retry=retry)
         else:
-            self.module.fail_json( msg=f"Wait for {job_id} to become {state} timed out")
+            self.module.fail_json(msg=f"Wait for {job_id} to become {state} timed out")
 
     @staticmethod
     def _backoff(retry, retry_max_delay=12):
         """pause the computation for some time, based on the number of retries
         retries are kept track by the parent wait_for_job() function
-        
-        Basically with every iteration of retry, the function will wait alittle longer 
+
+        Basically with every iteration of retry, the function will wait alittle longer
         until it waits for a max of retry_max_delay seconds.
         """
         randomness = random.randint(0, 1000) / 1000.0
@@ -166,4 +167,3 @@ class SitehostAPI:
                 required=True,
             ),
         )
-
