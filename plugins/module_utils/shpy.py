@@ -28,7 +28,6 @@ SH_USER_AGENT = "Ansible SiteHost"
 
 
 class SitehostAPI:
-    api_endpoint = "https://api.staging.sitehost.nz/1.2"
 
     def __init__(self, module, api_key, api_client_id):
         self.module = module
@@ -81,7 +80,7 @@ class SitehostAPI:
         data.move_to_end("apikey", last=False)
 
         r = requests.request(
-            method, headers=self.headers, url=SitehostAPI.api_endpoint + path, data=data
+            method, headers=self.headers, url=self.module.params["api_endpoint"] + path, data=data
         )
 
         json_r = r.json()

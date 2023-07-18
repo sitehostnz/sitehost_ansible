@@ -129,7 +129,7 @@ class AnsibleSitehostServer:
             "sitehost_server": dict(),
             "diff": dict(before=dict(), after=dict()),
             "sitehost_api": {
-                "api_endpoint": SitehostAPI.api_endpoint,
+                "api_endpoint": self.module.params["api_endpoint"],
             },
         }
 
