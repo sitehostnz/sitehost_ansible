@@ -268,18 +268,20 @@ class AnsibleSitehostServer:
                 msg="Requested product is the same as current server product, skipping.",
             )
 
+        # stage server upgrade
         body = OrderedDict()
         body["name"] = self.module.params.get("name")
         body["plan"] = self.module.params.get("product_code")
         self.sh_api.api_query(
             path="/server/upgrade_plan.json", method="POST", data=body
-        )  # stage server upgrade
+        )
 
+        # commit upgrade, will restart server
         body = OrderedDict()
         body["name"] = self.module.params.get("name")
         upgrade_job = self.sh_api.api_query(
             path="/server/commit_disk_changes.json", method="POST", data=body
-        )  # commit upgrade, will restart server
+        )
 
         job_result = self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
 
@@ -293,7 +295,7 @@ class AnsibleSitehostServer:
 
         self.module.exit_json(**self.result)
 
-    def create_or_update(self):
+    def create_or_upgrade(self):
         if self.module.params.get("name"):  # if server name exist, upgrade the server
             self.upgrade()
         elif self.module.params.get(
@@ -388,7 +390,7 @@ def main():
     if state == "absent":
         sitehostserver.absent()
     elif state == "present":
-        sitehostserver.create_or_update()
+        sitehostserver.create_or_upgrade()
     else:
         sitehostserver.handle_power_status()
 
