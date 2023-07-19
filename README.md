@@ -54,7 +54,7 @@ You need to create a new yaml file `test.yml` with the playbook, here an example
     - name: Create a VPS with 1.5G RAM OS Ubuntu 20.04
       sitehost.cloud.server:
         label: ansiblet1
-        location: SHQLIN
+        location: AKLCITY
         product_code: XENLIT
         image: ubuntu-focal.amd64
 ```

@@ -3,3 +3,7 @@ output
 resources
 sitehost-cloud-*.tar.gz
 .venv
+.vscode/tasks.json
+.vscode/settings.json
+test.yml
+test.py

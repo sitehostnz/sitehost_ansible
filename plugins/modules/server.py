@@ -15,7 +15,7 @@ description:
   - Manage servers
 version_added: "0.1"
 author:
-  - "Gonzalo Rios (@gonzariosm)"
+  - "SiteHost Developers (developers@sitehost.co.nz)"
 options:
   label:
     description:
@@ -113,124 +113,222 @@ sitehost_instance:
           sample: "11353"
 """
 
-from collections import OrderedDict
+from collections import OrderedDict  # noqa: E402
 
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
-from ..module_utils.shpy import AnsibleSitehost, sitehost_argument_spec
+from ..module_utils.sitehost import SitehostAPI  # noqa: E402
 
 
-class AnsibleSitehostServer(AnsibleSitehost):
-    def get_ssh_key_ids(self):
-        ssh_key_names = list(self.module.params["ssh_keys"])
-        ssh_keys = self.query_list(path="/ssh-keys", result_key="ssh_keys")
+class AnsibleSitehostServer:
+    def __init__(self, module, api):
+        self.sh_api = api
+        self.module = module
+        self.result = {
+            "changed": False,
+            "sitehost_server": dict(),
+            "diff": dict(before=dict(), after=dict()),
+            "sitehost_api": {
+                "api_endpoint": self.module.params["api_endpoint"],
+            },
+        }
 
-        ssh_key_ids = list()
-        for ssh_key in ssh_keys:
-            if ssh_key["name"] in ssh_key_names:
-                ssh_key_ids.append(ssh_key["id"])
-                ssh_key_names.remove(ssh_key["name"])
+    def absent(self):
+        """deletes a server
+        Overloading parent class method as a test right now
+        """
+        server_to_delete = self.get_server_by_name()
 
-        if ssh_key_names:
-            self.module.fail_json(msg="SSH key names not found: %s" % ", ".join(ssh_key_names))
+        if not server_to_delete:  # server does not exist, so just skip and continue
+            self.result["skipped"] = True
+            self.module.exit_json(
+                msg="Server does not exist, skipping task.", **self.result
+            )
 
-        return ssh_key_ids
+        body = OrderedDict()
+        body["name"] = server_to_delete["name"]
+        deleteresult = self.sh_api.api_query(
+            path="/server/delete.json",
+            method="POST",
+            data=body,
+        )
 
-    def transform_resource(self, resource):
-        # if not resource:
-        #     return resource
+        # pause execution until the server is fully deleted
+        delete_job_result = self.sh_api.wait_for_job(
+            job_id=deleteresult["return"]["job_id"]
+        )
 
-        # features = resource.get("features", list())
-        # resource["backups"] = "enabled" if "auto_backups" in features else "disabled"
-        # resource["enable_ipv6"] = "ipv6" in features
-        # resource["ddos_protection"] = "ddos_protection" in features
-        # resource["vpcs"] = self.get_instance_vpcs(resource=resource)
+        self.result["changed"] = True
 
-        return resource
+        self.result["diff"]["before"] = server_to_delete
+        self.result["diff"]["after"] = delete_job_result
+        self.result["message"] = delete_job_result["message"]
 
-    def configure(self):
-        if self.module.params["state"] != "absent":
-            if self.module.params["ssh_keys"] is not None:
-                # sshkey_id ist a list of ids
-                self.module.params["sshkey_id"] = self.get_ssh_key_ids()
+        self.module.exit_json(**self.result)
 
-        super(AnsibleSitehostServer, self).configure()
+    def handle_power_status(self):
+        """this handles starting, stopping, and restarting servers"""
+        # check if the server exist
+        if not self.get_server_by_name():
+            self.module.fail_json(msg="ERROR: server does not exist.")
 
-    def handle_power_status(self, resource, state, action, power_status, force=False):
-        if state == self.module.params["state"] and (resource["power_status"] != power_status or force):
-            self.result["changed"] = True
-            if not self.module.check_mode:
-                self.api_query(
-                    path="%s/%s/%s" % (self.resource_path, resource[self.resource_key_id], action),
-                    method="POST",
-                )
-                resource = self.wait_for_state(resource=resource, key="power_status", state=power_status)
-        return resource
+        requested_server_state = self.module.params.get("state")
+
+        # always restart server when requested
+        if requested_server_state == "restarted":
+            body = OrderedDict()
+            body["name"] = self.module.params.get("name")
+            body["state"] = "reboot"
+
+            restart_result = self.sh_api.api_query(
+                path="/server/change_state.json", method="POST", data=body
+            )
+
+            restart_job = self.sh_api.wait_for_job(
+                job_id=restart_result["return"]["job_id"]
+            )
+            self.module.exit_json(changed=True, job_status=restart_job)
+
+        current_server_state = self.sh_api.api_query(
+            path="/server/get_state.json",
+            query_params={"name": self.module.params.get("name")},
+        )["return"]["state"]
+
+        server_state_map = {
+            "On": "started",
+            "Off": "stopped",
+        }
+
+        # if server is the requested state already, skip task
+        if server_state_map[current_server_state] == requested_server_state:
+            self.module.exit_json(
+                skipped=True,
+                msg=f"server already {server_state_map[current_server_state]}, skipped task",
+                **self.result,
+            )
+
+        # the server state is different from requested state, start/stop server
+        body = OrderedDict()
+        body["name"] = self.module.params.get("name")
+        body["state"] = (
+            "power_on" if requested_server_state == "started" else "power_off"
+        )
+
+        startjob = self.sh_api.api_query(
+            path="/server/change_state.json", method="POST", data=body
+        )
+        startresult = self.sh_api.wait_for_job(job_id=startjob["return"]["job_id"])
+
+        self.module.exit_json(changed=True, job_status=startresult)
 
     def create(self):
-        data = OrderedDict()
+        """provisions a new server"""
+        body = OrderedDict()
 
-        data["label"] = self.module.params.get("label")
-        data["location"] = self.module.params.get("location")
-        data["product_code"] = self.module.params.get("product_code")
-        data["image"] = self.module.params.get("image")
-        # data["ssh_keys"] = self.module.params.get("ssh_keys")
-        data["params[ipv4]"] = "auto"
+        body["label"] = self.module.params["label"]
+        body["location"] = self.module.params["location"]
+        body["product_code"] = self.module.params["product_code"]
+        body["image"] = self.module.params["image"]
+        body["params[ipv4]"] = "auto"
 
         self.result["changed"] = True
         resource = dict()
 
         self.result["diff"]["before"] = dict()
-        self.result["diff"]["after"] = data
+        self.result["diff"]["after"] = body
+
+        
 
         if not self.module.check_mode:
-            resource = self.api_query(
-                path="%s/provision.json" % (self.resource_path),
+            resource = self.sh_api.api_query(
+                path="/server/provision.json",
                 method="POST",
-                data=data,
+                data=body,
             )
 
-        # return resource if resource else dict()
-        return resource.get(self.resource_result_key_singular) if resource else dict()
+            self.result["sitehost_server"]=resource
+            
+            if resource:
+                self.sh_api.wait_for_job(
+                    job_id=resource["return"]["job_id"], state="Completed"
+                )
 
-    def update(self, resource):
-        user_data = self.get_user_data(resource=resource)
-        resource["user_data"] = user_data.encode()
+        self.module.exit_json(**self.result)
 
-        if self.module.params["vpcs"] is not None:
-            resource["attach_vpc"] = list()
-            for vpc in list(resource["vpcs"]):
-                resource["attach_vpc"].append(vpc["id"])
+    def upgrade(self):
+        """
+        upgrades the server, called when server name is provided and server exists
+        It will first stage the upgrade then commit the upgrade with the api, restarts server
+        """
+        server_to_upgrade = self.get_server_by_name()
+        # check if the server exist
+        if not server_to_upgrade:
+            self.module.fail_json(msg="ERROR: Server does not exist.")
 
-            # detach_vpc is a list of ids to be detached
-            resource["detach_vpc"] = list()
-            self.module.params["detach_vpc"] = self.get_detach_vpcs_ids(resource=resource)
+        # check if server plan is same as inputed product code
+        if server_to_upgrade["product_code"] == self.module.params["product_code"]:
+            self.module.exit_json(
+                skipped=True,
+                msg="Requested product is the same as current server product, skipping.",
+            )
 
-        return super(AnsibleSitehostServer, self).update(resource=resource)
+        # stage server upgrade
+        body = OrderedDict()
+        body["name"] = self.module.params.get("name")
+        body["plan"] = self.module.params.get("product_code")
+        self.sh_api.api_query(
+            path="/server/upgrade_plan.json", method="POST", data=body
+        )
 
-    def create_or_update(self):
-        resource = super(AnsibleSitehostServer, self).create_or_update()
-        if resource:
-            resource = self.wait_for_job(resource, job_id=resource["job_id"], state="Completed")
-        #     resource = self.wait_for_state(resource=resource, key="server_status", state="locked", cmp="!=")
-        #     # Handle power status
-        #     resource = self.handle_power_status(resource=resource, state="stopped", action="halt", power_status="stopped")
-        #     resource = self.handle_power_status(resource=resource, state="started", action="start", power_status="running")
-        #     resource = self.handle_power_status(resource=resource, state="restarted", action="reboot", power_status="running", force=True)
-        return resource
+        # commit upgrade, will restart server
+        body = OrderedDict()
+        body["name"] = self.module.params.get("name")
+        upgrade_job = self.sh_api.api_query(
+            path="/server/commit_disk_changes.json", method="POST", data=body
+        )
 
-    def transform_result(self, resource):
-        return resource
+        job_result = self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
+
+        server_after_upgrade = self.get_server_by_name()
+
+        self.result["diff"]["before"] = server_to_upgrade
+        self.result["diff"]["after"] = server_after_upgrade
+        self.result["job_result"] = job_result
+        self.result["msg"] = job_result["message"]
+        self.result["changed"] = True
+
+        self.module.exit_json(**self.result)
+
+    def create_or_upgrade(self):
+        if self.module.params.get("name"):  # if server name exist, upgrade the server
+            self.upgrade()
+        elif self.module.params.get(
+            "label"
+        ):  # else if label only, create the new server
+            self.create()
+        else:  # something is wrong with the code
+            self.module.fail_json(msg="ERROR: no name or label given, exiting")
+
+    def get_server_by_name(self, server_name=None):
+        """return a server by its server name"""
+        if server_name is None:
+            server_name = self.module.params.get("name")
+
+        return self.sh_api.api_query(
+            path="/server/get_server.json",
+            query_params=OrderedDict({"name": server_name}),
+        )["return"]
+
 
 def main():
-    argument_spec = sitehost_argument_spec()
+    argument_spec = SitehostAPI.sitehost_argument_spec()
     argument_spec.update(
         dict(
-            label=dict(type="str", required=True),
-            location=dict(type="str", required=True),
-            product_code=dict(type="str", required=True),
-            image=dict(type="str", required=True),
-            ssh_keys=dict(type="list", elements="str", no_log=False),
+            label=dict(type="str"),
+            name=dict(type="str"),
+            location=dict(type="str"),
+            product_code=dict(type="str"),
+            image=dict(type="str"),
             state=dict(
                 choices=[
                     "present",
@@ -241,6 +339,7 @@ def main():
                 ],
                 default="present",
             ),
+            notes=dict(type="str"),
         )  # type: ignore
     )
 
@@ -250,30 +349,23 @@ def main():
         supports_check_mode=True,
     )
 
-    sitehost = AnsibleSitehostServer(
+    sitehost_api = SitehostAPI(
         module=module,
-        namespace="sitehost_server",
-        resource_path="/server",
-        resource_result_key_singular="return",
-        resource_create_param_keys=[
-            "label",
-            "location",
-            "product_code",
-            "image",
-            "ssh_keys",
-        ],
-        resource_update_param_keys=[
-            "product_code",
-        ],
-        resource_key_name="label",
+        api_key=module.params["api_key"],
+        api_client_id=module.params["api_client_id"],
     )
 
-    state = module.params.get("state")  # type: ignore
+    sitehostserver = AnsibleSitehostServer(module=module, api=sitehost_api)
+
+    state = module.params["state"]  # type: ignore
 
     if state == "absent":
-        sitehost.absent()
+        sitehostserver.absent()
+    elif state == "present":
+        sitehostserver.create_or_upgrade()
     else:
-        sitehost.present()
+        sitehostserver.handle_power_status()
+
 
 if __name__ == "__main__":
     main()
