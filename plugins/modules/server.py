@@ -15,7 +15,7 @@ description:
   - Manage servers
 version_added: "0.1"
 author:
-  - "Gonzalo Rios (@gonzariosm)"
+  - "SiteHost Developers (developers@sitehost.co.nz)"
 options:
   label:
     description:
