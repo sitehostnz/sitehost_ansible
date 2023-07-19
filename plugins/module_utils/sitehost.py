@@ -149,7 +149,7 @@ class SitehostAPI:
             api_endpoint=dict(
                 type="str",
                 fallback=(env_fallback, ["SH_API_ENDPOINT"]),
-                default="https://api.staging.sitehost.nz/1.2",
+                default="https://api.sitehost.nz/1.2",
             ),
             api_key=dict(
                 type="str",
