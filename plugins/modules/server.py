@@ -309,38 +309,6 @@ class AnsibleSitehostServer:
         else:  # something is wrong with the code
             self.module.fail_json(msg="ERROR: no name or label given, exiting")
 
-    def get_servers_by_label(self, server_label=None, sort_by="created"):
-        """
-        uses sitehost api to return all servers excatly matching the server label given
-        in the module argument
-
-        :param sort_by: defaults to "created", use to to set how the server is sorted.
-        example: "state", "maint_date", "name"
-        """
-        if server_label is None:
-            server_label = self.module.params.get(
-                "label"
-            )  # get the server label user given
-
-        # get list of servers that potentially matches the user given server label
-        list_of_server = self.sh_api.api_query(
-            path="/server/list_servers.json",
-            query_params=OrderedDict(
-                [
-                    ("filters[name]", server_label),
-                    ("filters[sort_by]", sort_by),
-                    ("filters[sort_dir]", "desc"),
-                ]
-            ),
-        )["return"]["data"]
-
-        # since sitehost api return all servers losely matching the given server label
-        # this will filter out all servers that does not excatly
-        # match the given server label
-        list_of_server = [s for s in list_of_server if s["label"] == server_label]
-
-        return list_of_server
-
     def get_server_by_name(self, server_name=None):
         """return a server by its server name"""
         if server_name is None:
