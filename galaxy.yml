@@ -1,18 +1,19 @@
 ---
 authors:
   - "Gonzalo Rios @gonzariosm"
+  - "Clemson Cheong @clemsonsitehost"
 dependencies: {}
 description: "Ansible Collection for SiteHost"
-documentation: ""
-homepage: ""
-issues: ""
-license_file: ""
+# documentation: ""
+# homepage: ""
+# issues: ""
+license_file: "COPYING"
 name: cloud
 namespace: sitehost
 readme: README.md
-repository: ""
+repository: "https://www.github.com/my_org/my_collection"
 tags:
   - sitehost
   - cloud
-version: 1.0.0
+version: 0.0.1
 build_ignore: ["*.tar.gz", ".github", ".venv"]

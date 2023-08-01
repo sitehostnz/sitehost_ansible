@@ -134,9 +134,7 @@ class AnsibleSitehostServer:
         }
 
     def absent(self):
-        """deletes a server
-        Overloading parent class method as a test right now
-        """
+        """deletes a server"""
         server_to_delete = self.get_server_by_name()
 
         if not server_to_delete:  # server does not exist, so just skip and continue
@@ -144,6 +142,10 @@ class AnsibleSitehostServer:
             self.module.exit_json(
                 msg="Server does not exist, skipping task.", **self.result
             )
+
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         body = OrderedDict()
         body["name"] = server_to_delete["name"]
@@ -170,12 +172,20 @@ class AnsibleSitehostServer:
         """this handles starting, stopping, and restarting servers"""
         # check if the server exist
         if not self.get_server_by_name():
+            #  check mode, server might not be created yet
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
             self.module.fail_json(msg="ERROR: server does not exist.")
 
         requested_server_state = self.module.params.get("state")
 
         # always restart server when requested
         if requested_server_state == "restarted":
+
+            #  check mode
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
+
             body = OrderedDict()
             body["name"] = self.module.params.get("name")
             body["state"] = "reboot"
@@ -207,6 +217,10 @@ class AnsibleSitehostServer:
                 **self.result,
             )
 
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         # the server state is different from requested state, start/stop server
         body = OrderedDict()
         body["name"] = self.module.params.get("name")
@@ -223,6 +237,11 @@ class AnsibleSitehostServer:
 
     def create(self):
         """provisions a new server"""
+
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         body = OrderedDict()
 
         body["label"] = self.module.params["label"]
@@ -232,26 +251,24 @@ class AnsibleSitehostServer:
         body["params[ipv4]"] = "auto"
 
         self.result["changed"] = True
-        resource = dict()
 
         self.result["diff"]["before"] = dict()
         self.result["diff"]["after"] = body
 
         
 
-        if not self.module.check_mode:
-            resource = self.sh_api.api_query(
-                path="/server/provision.json",
-                method="POST",
-                data=body,
-            )
+        resource = self.sh_api.api_query(
+            path="/server/provision.json",
+            method="POST",
+            data=body,
+        )
 
-            self.result["sitehost_server"]=resource
-            
-            if resource:
-                self.sh_api.wait_for_job(
-                    job_id=resource["return"]["job_id"], state="Completed"
-                )
+        self.result["sitehost_server"]=resource
+        
+        if resource:
+            self.sh_api.wait_for_job(
+                job_id=resource["return"]["job_id"], state="Completed"
+            )
 
         self.module.exit_json(**self.result)
 
@@ -263,6 +280,9 @@ class AnsibleSitehostServer:
         server_to_upgrade = self.get_server_by_name()
         # check if the server exist
         if not server_to_upgrade:
+            #  check mode, the server may had been created earlier
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
             self.module.fail_json(msg="ERROR: Server does not exist.")
 
         # check if server plan is same as inputed product code
@@ -271,6 +291,10 @@ class AnsibleSitehostServer:
                 skipped=True,
                 msg="Requested product is the same as current server product, skipping.",
             )
+
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         # stage server upgrade
         body = OrderedDict()
@@ -314,10 +338,16 @@ class AnsibleSitehostServer:
         if server_name is None:
             server_name = self.module.params.get("name")
 
-        return self.sh_api.api_query(
+        retrieved_server = self.sh_api.api_query(
             path="/server/get_server.json",
             query_params=OrderedDict({"name": server_name}),
-        )["return"]
+        )
+
+        # if server exist, return it
+        if retrieved_server["status"]:
+            return retrieved_server["return"]
+
+        return None #  server does not exist
 
 
 def main():
