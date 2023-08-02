@@ -181,7 +181,6 @@ class AnsibleSitehostServer:
 
         # always restart server when requested
         if requested_server_state == "restarted":
-
             #  check mode
             if self.module.check_mode:
                 self.module.exit_json(changed=True)
@@ -255,16 +254,14 @@ class AnsibleSitehostServer:
         self.result["diff"]["before"] = dict()
         self.result["diff"]["after"] = body
 
-        
-
         resource = self.sh_api.api_query(
             path="/server/provision.json",
             method="POST",
             data=body,
         )
 
-        self.result["sitehost_server"]=resource
-        
+        self.result["sitehost_server"] = resource
+
         if resource:
             self.sh_api.wait_for_job(
                 job_id=resource["return"]["job_id"], state="Completed"
@@ -280,7 +277,7 @@ class AnsibleSitehostServer:
         server_to_upgrade = self.get_server_by_name()
         # check if the server exist
         if not server_to_upgrade:
-            #  check mode, the server may had been created earlier
+            # check mode, the server may had been created earlier
             if self.module.check_mode:
                 self.module.exit_json(changed=True)
             self.module.fail_json(msg="ERROR: Server does not exist.")
@@ -326,9 +323,9 @@ class AnsibleSitehostServer:
     def create_or_upgrade(self):
         if self.module.params.get("name"):  # if server name exist, upgrade the server
             self.upgrade()
-        elif self.module.params.get(
-            "label"
-        ):  # else if label only, create the new server
+
+        # else if label only, create the new server
+        elif self.module.params.get("label"):
             self.create()
         else:  # something is wrong with the code
             self.module.fail_json(msg="ERROR: no name or label given, exiting")
@@ -347,7 +344,7 @@ class AnsibleSitehostServer:
         if retrieved_server["status"]:
             return retrieved_server["return"]
 
-        return None #  server does not exist
+        return None  # server does not exist
 
 
 def main():
@@ -375,7 +372,15 @@ def main():
 
     module = AnsibleModule(
         argument_spec=argument_spec,
-        required_if=(("state", "present", ("product_code",)),),
+        required_if=(
+            ("state", "present", ("product_code",)),
+            ("state", "absent", ("name",)),
+            ("state", "started", ("name",)),
+            ("state", "stopped", ("name",)),
+            ("state", "restarted", ("name",)),
+        ),
+        mutually_exclusive=[("label", "name")],
+        required_by={'label':("location","product_code","image")},
         supports_check_mode=True,
     )
 
