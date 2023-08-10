@@ -126,8 +126,7 @@ class AnsibleSitehostServer:
         self.module = module
         self.result = {
             "changed": False,
-            "sitehost_server": dict(),
-            "diff": dict(before=dict(), after=dict()),
+            "server": dict(),
             "sitehost_api": {
                 "api_endpoint": self.module.params["api_endpoint"],
             },
@@ -161,10 +160,7 @@ class AnsibleSitehostServer:
         )
 
         self.result["changed"] = True
-
-        self.result["diff"]["before"] = server_to_delete
-        self.result["diff"]["after"] = delete_job_result
-        self.result["message"] = delete_job_result["message"]
+        self.result["msg"] = f"{server_to_delete['name']} has been deleted"
 
         self.module.exit_json(**self.result)
 
@@ -186,7 +182,7 @@ class AnsibleSitehostServer:
                 self.module.exit_json(changed=True)
 
             body = OrderedDict()
-            body["name"] = self.module.params.get("name")
+            body["name"] = self.module.params["name"]
             body["state"] = "reboot"
 
             restart_result = self.sh_api.api_query(
@@ -196,7 +192,9 @@ class AnsibleSitehostServer:
             restart_job = self.sh_api.wait_for_job(
                 job_id=restart_result["return"]["job_id"]
             )
-            self.module.exit_json(changed=True, job_status=restart_job)
+            self.module.exit_json(
+                changed=True, msg=f"{self.module.params['name']} restarted"
+            )
 
         current_server_state = self.sh_api.api_query(
             path="/server/get_state.json",
@@ -232,7 +230,10 @@ class AnsibleSitehostServer:
         )
         startresult = self.sh_api.wait_for_job(job_id=startjob["return"]["job_id"])
 
-        self.module.exit_json(changed=True, job_status=startresult)
+        self.result["changed"] = True
+        self.result["msg"] = f"Server {self.module.params['state']} successfully"
+
+        self.module.exit_json(**self.result)
 
     def create(self):
         """provisions a new server"""
@@ -249,23 +250,21 @@ class AnsibleSitehostServer:
         body["image"] = self.module.params["image"]
         body["params[ipv4]"] = "auto"
 
-        self.result["changed"] = True
-
-        self.result["diff"]["before"] = dict()
-        self.result["diff"]["after"] = body
-
         resource = self.sh_api.api_query(
             path="/server/provision.json",
             method="POST",
             data=body,
         )
 
-        self.result["sitehost_server"] = resource
-
         if resource:
             self.sh_api.wait_for_job(
                 job_id=resource["return"]["job_id"], state="Completed"
             )
+
+        self.result["server"] = resource["return"]
+        self.result[ "msg" ] = (f"server created: {resource['return']['name']},"
+        f" with user: root and password: {resource['return']['password']}")
+        self.result["changed"] = True
 
         self.module.exit_json(**self.result)
 
@@ -312,10 +311,8 @@ class AnsibleSitehostServer:
 
         server_after_upgrade = self.get_server_by_name()
 
-        self.result["diff"]["before"] = server_to_upgrade
-        self.result["diff"]["after"] = server_after_upgrade
-        self.result["job_result"] = job_result
-        self.result["msg"] = job_result["message"]
+        self.result["msg"] = f"{server_after_upgrade['name']} sucessfully upgraded"
+        self.result["server"] = server_after_upgrade
         self.result["changed"] = True
 
         self.module.exit_json(**self.result)
@@ -380,7 +377,7 @@ def main():
             ("state", "restarted", ("name",)),
         ),
         mutually_exclusive=[("label", "name")],
-        required_by={'label':("location","product_code","image")},
+        required_by={"label": ("location", "product_code", "image")},
         supports_check_mode=True,
     )
 
