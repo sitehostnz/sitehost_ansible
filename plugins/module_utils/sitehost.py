@@ -115,16 +115,20 @@ class SitehostAPI:
 
             job_status = job_resource.get("return")["state"]
 
-            if job_status == state:
-                return job_resource[
-                    "return"
-                ]  # return information on job details when it succeded
+            # return information on job details when it succeded
+            if ( job_status == state ):  
+                return job_resource["return"]
             elif job_status == "Failed":
-                self.module.fail_json(msg=f"Job {job_id} failed")
+                self.module.fail_json(
+                    msg=f"Job {job_id} failed", job_result=job_resource
+                )
 
             SitehostAPI._backoff(retry=retry)
         else:
-            self.module.fail_json(msg=f"Wait for {job_id} to become {state} timed out")
+            self.module.fail_json(
+                msg=f"Wait for {job_id} to become {state} timed out",
+                job_result=job_resource,
+            )
 
     @staticmethod
     def _backoff(retry, retry_max_delay=12):
