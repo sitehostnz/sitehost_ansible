@@ -15,5 +15,5 @@ repository: "https://www.github.com/my_org/my_collection"
 tags:
   - sitehost
   - cloud
-version: 0.0.1
+version: 1.0.0
 build_ignore: ["*.tar.gz", ".github", ".venv"]
