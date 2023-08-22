@@ -4,16 +4,16 @@ authors:
   - "Clemson Cheong @clemsonsitehost"
 dependencies: {}
 description: "Ansible Collection for SiteHost"
-# documentation: ""
-# homepage: ""
-# issues: ""
+documentation: "https://kb.sitehost.nz/developers/sitehost-ansible-collection"
+homepage: "https://github.com/sitehostnz/sitehost_ansible"
+issues: "https://github.com/sitehostnz/sitehost_ansible/issues"
 license_file: "COPYING"
 name: cloud
 namespace: sitehost
 readme: README.md
-repository: "https://www.github.com/my_org/my_collection"
+repository: "https://github.com/sitehostnz/sitehost_ansible"
 tags:
   - sitehost
   - cloud
 version: 1.0.0
-build_ignore: ["*.tar.gz", ".github", ".venv"]
+build_ignore: ["*.tar.gz", ".github", ".venv","test.*",".vscode"]

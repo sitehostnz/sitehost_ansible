@@ -16,7 +16,6 @@ module: server
 short_description: Manage SiteHost servers
 description: 
   - Used for provisioning, deleting, upgrading, starting and stopping servers on your SiteHost account.
-version_added: "0.1"
 author:
   - "SiteHost Developers (developers@sitehost.co.nz)"
 options:
