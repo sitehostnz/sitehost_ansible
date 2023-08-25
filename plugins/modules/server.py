@@ -2,116 +2,171 @@
 # -*- coding: utf-8 -*-
 #
 
+# Copyright: Contributors to the Ansible project
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
 
 DOCUMENTATION = """
------
+---
 module: server
-short_description: Manage servers
-description:
-  - Manage servers
-version_added: "0.1"
+short_description: Manage SiteHost servers
+description: 
+  - Used for provisioning, deleting, upgrading, starting and stopping servers on your SiteHost account.
 author:
   - "SiteHost Developers (developers@sitehost.co.nz)"
 options:
-  label:
-    description:
-      - Label for the new server..
-    required: true
-    type: str
-  location:
-    description:
-      - The code for the location to provision the new server at.
-    required: true
-    type: str
-  product_code:
-    description:
-      - The code for the product to use for the new server.
-    required: true
-    type: str
-  image:
-    description:
-      - The image to use for the new server.
-    required: true
-    type: str
-  ssh_keys:
-    description:
-      - List of SSH key names passed to the server on creation.
-    type: list
-    elements: str
   state:
     description:
-      - State of the instance.
+      - Indicates the desired state of the server.
+      - C(present) will either upgrade or create a server; 'label' is required for provisioning a server, and use 'name' for upgrading a server.
+      - C(absent) will delete the server.
+      - C(started) for powering on the server.
+      - C(stopped) for powering off the server.
+      - C(restarted) for restarting the server.
     default: present
     choices: [ present, absent, started, stopped, restarted ]
     type: str
-extends_documentation_fragment:
-  - sitehost.cloud.shpy
-'''
+  label:
+    description:
+      - User chosen label of the new server, mutually exclusive to C(name).
+      - Please ensure that verbose mode C(-v) is enabled to see the password of the newly created server.
+    type: str
+  name:
+    description:
+      - Unique auto generated machine name for server.
+      - Used to select a server that is already present.
+    type: str
+  location:
+    description:
+      - The code for the L(location,https://kb.sitehost.nz/developers/api/locations) to provision the new server at. eg. AKLCITY
+    type: str
+  product_code:
+    description:
+      - The code for the L(server specification,https://kb.sitehost.nz/developers/api/product-codes) to use when provisioning the new server. eg. XENLIT
+    type: str
+  image:
+    description:
+      - The L(image,https://kb.sitehost.nz/developers/api/images) to use for the new server. eg. ubuntu-jammy-pvh.amd64
+    type: str
+  api_key:
+    description: 
+      - Your SiteHost api key L(generated from CP,https://kb.sitehost.nz/developers/api#creating-an-api-key).
+    required: true
+    type: str
+  api_client_id:
+    description:
+      - The client id of your SiteHost account.
+    required: true
+    type: int
+"""
 
-EXAMPLES = '''
----
-- name: Create a VPS with 1.5G RAM OS Ubuntu 20.04
+EXAMPLES = """
+# Creating a VPS, use `-v` as argument to see password
+- name: Create a 1 core VPS with ubuntu jammy image
   sitehost.cloud.server:
-    label: webserver
+    label: myserver
     location: AKLCITY
     product_code: XENLIT
-    image: ubuntu-focal.amd64
-    ssh_keys:
-      - my ssh key
-'''
+    image: ubuntu-jammy-pvh.amd64
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: present
 
-RETURN = '''
----
-sitehost_api:
-  description: Response from SiteHost API.
+# Create a VPS and register its output to shserver and outputs the password
+- name: Create a 1 core VPS with ubuntu jammy image
+  sitehost.cloud.server:
+    label: myserver
+    location: AKLCITY
+    product_code: XENLIT
+    image: ubuntu-jammy-pvh.amd64
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: present
+  register: shserver 
+
+- name: output shserver
+  ansible.builtin.debug:
+    msg: "{{ shserver.server.password }}"
+
+# Creating a server then upgrading it
+- name: Create a 1 core VPS with ubuntu jammy image
+  sitehost.cloud.server:
+    label: myserver
+    location: AKLCITY
+    product_code: XENLIT
+    image: ubuntu-jammy-pvh.amd64
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: present
+  register: shserver 
+
+- name: upgrade the previously created server
+    sitehost.cloud.server:
+    name: "{{ shserver.server.name }}"
+    product_code: XENPRO
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: present
+
+# Restarts the previously created server
+- name: restart server
+  sitehost.cloud.server:
+    name: "{{ shserver.server.name }}"
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: restarted
+
+# Deletes server 
+- name: delete server
+  sitehost.cloud.server:
+    name: "{{ shserver.server.name }}"
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: absent
+
+"""
+
+RETURN = """
+msg:
+  description: Text that indicates the status of the module.
+  returned: always
+  type: str
+  sample: webserver1 has been deleted
+server: 
+  description: The sitehost server being actioned. Note that there is more information output on server creation and upgrade.
   returned: success
   type: dict
   contains:
-    api_endpoint:
-      description: Endpoint used for the API requests.
+    label: 
+      description: User chosen label for the server.
       returned: success
       type: str
-      sample: "https://api.staging.sitehost.nz/1.2"
-sitehost_instance:
-  description: Response from SiteHost API.
-  returned: success
-  type: dict
-  contains:
-    return:
-      description: Details of server provision.
+      sample: mywebserver
+    name:
+      description: Unique system generated name for server.
       returned: success
-      type: list
-      contains:
-        job_id:
-          description: Job ID.
-          returned: success
-          type: str
-          sample: 2251119
-        name:
-          description: Server name.
-          returned: success
-          type: str
-          sample: "server-name"
-        password:
-          description: Password for root user.
-          returned: success
-          type: str
-          sample: "4d6bxsnx"
-        ips:
-          description: List of IPs assigned.
-          returned: success
-          type: list
-          sample: [ 192.168.11.108 ]
-        server_id:
-          description: Server ID.
-          returned: success
-          type: str
-          sample: "11353"
+      type: str
+      sample: mywebserv2
+    password:
+      description: Password for the root user, only returned during server creation.
+      returned: success
+      type: str
+      sample: Up8Da5oE60ns
+    state:
+      description: The state of the server after executing the command.
+      return: success
+      type: str
+      sample: 
+        - On
+        - Off
+        - Reboot
+        - Deleted
 """
+
 
 from collections import OrderedDict  # noqa: E402
 
@@ -126,24 +181,21 @@ class AnsibleSitehostServer:
         self.module = module
         self.result = {
             "changed": False,
-            "sitehost_server": dict(),
-            "diff": dict(before=dict(), after=dict()),
-            "sitehost_api": {
-                "api_endpoint": self.module.params["api_endpoint"],
-            },
+            "server": dict(),
         }
 
     def absent(self):
-        """deletes a server
-        Overloading parent class method as a test right now
-        """
+        """deletes a server"""
         server_to_delete = self.get_server_by_name()
-
         if not server_to_delete:  # server does not exist, so just skip and continue
             self.result["skipped"] = True
             self.module.exit_json(
                 msg="Server does not exist, skipping task.", **self.result
             )
+
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         body = OrderedDict()
         body["name"] = server_to_delete["name"]
@@ -153,59 +205,79 @@ class AnsibleSitehostServer:
             data=body,
         )
 
-        # pause execution until the server is fully deleted
-        delete_job_result = self.sh_api.wait_for_job(
-            job_id=deleteresult["return"]["job_id"]
-        )
+        self.sh_api.wait_for_job(job_id=deleteresult["return"]["job_id"])
 
         self.result["changed"] = True
-
-        self.result["diff"]["before"] = server_to_delete
-        self.result["diff"]["after"] = delete_job_result
-        self.result["message"] = delete_job_result["message"]
+        self.result["msg"] = f"{server_to_delete['name']} has been deleted"
+        self.result["server"] = {
+            "label": server_to_delete["label"],
+            "name": self.module.params["name"],
+            "state": "Deleted",
+        }
 
         self.module.exit_json(**self.result)
 
     def handle_power_status(self):
         """this handles starting, stopping, and restarting servers"""
         # check if the server exist
-        if not self.get_server_by_name():
+        server_to_change_state = self.get_server_by_name()
+        if not server_to_change_state:
+            #  check mode, server might not be created yet
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
             self.module.fail_json(msg="ERROR: server does not exist.")
 
         requested_server_state = self.module.params.get("state")
 
         # always restart server when requested
         if requested_server_state == "restarted":
+            #  check mode
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
+
             body = OrderedDict()
-            body["name"] = self.module.params.get("name")
-            body["state"] = "reboot"
+            body["name"] = self.module.params["name"]
+            body["state"] = "Reboot"
 
             restart_result = self.sh_api.api_query(
                 path="/server/change_state.json", method="POST", data=body
             )
 
-            restart_job = self.sh_api.wait_for_job(
-                job_id=restart_result["return"]["job_id"]
-            )
-            self.module.exit_json(changed=True, job_status=restart_job)
+            self.sh_api.wait_for_job(job_id=restart_result["return"]["job_id"])
 
+            self.module.exit_json(
+                changed=True,
+                msg=f"{self.module.params['name']} restarted",
+                server={
+                    "label": server_to_change_state["label"],
+                    "name": self.module.params["name"],
+                    "state": "On",
+                },
+            )
+
+        # otherwise get the current server state to check if task can be skipped
         current_server_state = self.sh_api.api_query(
             path="/server/get_state.json",
-            query_params={"name": self.module.params.get("name")},
+            query_params={"name": self.module.params["name"]},
         )["return"]["state"]
 
-        server_state_map = {
-            "On": "started",
-            "Off": "stopped",
-        }
+        server_state_map = {"On": "started", "Off": "stopped"}
 
         # if server is the requested state already, skip task
         if server_state_map[current_server_state] == requested_server_state:
-            self.module.exit_json(
-                skipped=True,
-                msg=f"server already {server_state_map[current_server_state]}, skipped task",
-                **self.result,
+            self.result["skipped"] = True
+            self.result["msg"] = (
+                f"server already {server_state_map[current_server_state]}, skipped task",
             )
+            self.result["server"] = {
+                "name": self.module.params["name"],
+                "label": server_to_change_state["return"]["label"],
+                "state": current_server_state,
+            }
+            self.module.exit_json(**self.result)
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         # the server state is different from requested state, start/stop server
         body = OrderedDict()
@@ -214,15 +286,28 @@ class AnsibleSitehostServer:
             "power_on" if requested_server_state == "started" else "power_off"
         )
 
-        startjob = self.sh_api.api_query(
+        state_change_job = self.sh_api.api_query(
             path="/server/change_state.json", method="POST", data=body
         )
-        startresult = self.sh_api.wait_for_job(job_id=startjob["return"]["job_id"])
+        self.sh_api.wait_for_job(job_id=state_change_job["return"]["job_id"])
 
-        self.module.exit_json(changed=True, job_status=startresult)
+        self.result["changed"] = True
+        self.result["msg"] = f"Server {self.module.params['state']} successfully"
+        self.result["server"] = {
+            "label": server_to_change_state["label"],
+            "name": self.module.params["name"],
+            "state": self.get_server_by_name()["state"],
+        }
+
+        self.module.exit_json(**self.result)
 
     def create(self):
         """provisions a new server"""
+
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         body = OrderedDict()
 
         body["label"] = self.module.params["label"]
@@ -231,27 +316,24 @@ class AnsibleSitehostServer:
         body["image"] = self.module.params["image"]
         body["params[ipv4]"] = "auto"
 
-        self.result["changed"] = True
-        resource = dict()
+        resource = self.sh_api.api_query(
+            path="/server/provision.json",
+            method="POST",
+            data=body,
+        )
 
-        self.result["diff"]["before"] = dict()
-        self.result["diff"]["after"] = body
-
-        
-
-        if not self.module.check_mode:
-            resource = self.sh_api.api_query(
-                path="/server/provision.json",
-                method="POST",
-                data=body,
+        if resource:
+            self.sh_api.wait_for_job(
+                job_id=resource["return"]["job_id"], state="Completed"
             )
 
-            self.result["sitehost_server"]=resource
-            
-            if resource:
-                self.sh_api.wait_for_job(
-                    job_id=resource["return"]["job_id"], state="Completed"
-                )
+        self.result["server"] = self.get_server_by_name(resource["return"]["name"])
+        self.result["server"]["password"] = resource["return"]["password"]
+        self.result["msg"] = (
+            f"server created: {resource['return']['name']},"
+            f" with user: root and password: {resource['return']['password']}"
+        )
+        self.result["changed"] = True
 
         self.module.exit_json(**self.result)
 
@@ -263,6 +345,9 @@ class AnsibleSitehostServer:
         server_to_upgrade = self.get_server_by_name()
         # check if the server exist
         if not server_to_upgrade:
+            # check mode, the server may had been created earlier
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
             self.module.fail_json(msg="ERROR: Server does not exist.")
 
         # check if server plan is same as inputed product code
@@ -271,6 +356,10 @@ class AnsibleSitehostServer:
                 skipped=True,
                 msg="Requested product is the same as current server product, skipping.",
             )
+
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         # stage server upgrade
         body = OrderedDict()
@@ -287,14 +376,12 @@ class AnsibleSitehostServer:
             path="/server/commit_disk_changes.json", method="POST", data=body
         )
 
-        job_result = self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
+        self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
 
         server_after_upgrade = self.get_server_by_name()
 
-        self.result["diff"]["before"] = server_to_upgrade
-        self.result["diff"]["after"] = server_after_upgrade
-        self.result["job_result"] = job_result
-        self.result["msg"] = job_result["message"]
+        self.result["msg"] = f"{server_after_upgrade['name']} sucessfully upgraded"
+        self.result["server"] = server_after_upgrade
         self.result["changed"] = True
 
         self.module.exit_json(**self.result)
@@ -302,9 +389,9 @@ class AnsibleSitehostServer:
     def create_or_upgrade(self):
         if self.module.params.get("name"):  # if server name exist, upgrade the server
             self.upgrade()
-        elif self.module.params.get(
-            "label"
-        ):  # else if label only, create the new server
+
+        # else if label only, create the new server
+        elif self.module.params.get("label"):
             self.create()
         else:  # something is wrong with the code
             self.module.fail_json(msg="ERROR: no name or label given, exiting")
@@ -314,10 +401,16 @@ class AnsibleSitehostServer:
         if server_name is None:
             server_name = self.module.params.get("name")
 
-        return self.sh_api.api_query(
+        retrieved_server = self.sh_api.api_query(
             path="/server/get_server.json",
             query_params=OrderedDict({"name": server_name}),
-        )["return"]
+        )
+
+        # if server exist, return it
+        if retrieved_server["status"]:
+            return retrieved_server["return"]
+
+        return None  # server does not exist
 
 
 def main():
@@ -339,13 +432,20 @@ def main():
                 ],
                 default="present",
             ),
-            notes=dict(type="str"),
         )  # type: ignore
     )
 
     module = AnsibleModule(
         argument_spec=argument_spec,
-        required_if=(("state", "present", ("product_code",)),),
+        required_if=(
+            ("state", "present", ("product_code",)),
+            ("state", "absent", ("name",)),
+            ("state", "started", ("name",)),
+            ("state", "stopped", ("name",)),
+            ("state", "restarted", ("name",)),
+        ),
+        mutually_exclusive=[("label", "name")],
+        required_by={"label": ("location", "product_code", "image")},
         supports_check_mode=True,
     )
 

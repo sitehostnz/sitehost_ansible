@@ -1,0 +1,8 @@
+ancestor: null
+releases:
+  1.0.0:
+    changes:
+      release_summary: Initial release of the collection.
+    fragments:
+    - inital_release.yml
+    release_date: '2023-08-18'
