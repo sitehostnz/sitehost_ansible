@@ -237,7 +237,7 @@ class AnsibleSitehostServer:
 
             body = OrderedDict()
             body["name"] = self.module.params["name"]
-            body["state"] = "Reboot"
+            body["state"] = "reboot"
 
             restart_result = self.sh_api.api_query(
                 path="/server/change_state.json", method="POST", data=body
