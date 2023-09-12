@@ -15,5 +15,5 @@ repository: "https://github.com/sitehostnz/sitehost_ansible"
 tags:
   - sitehost
   - cloud
-version: 1.0.0
-build_ignore: ["*.tar.gz", ".github", ".venv","test.*",".vscode"]
+version: 1.0.1
+build_ignore: ["*.tar.gz", ".github", ".venv","test*",".vscode"]
