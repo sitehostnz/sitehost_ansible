@@ -90,6 +90,12 @@ class AnsibleSitehostDNS:
         else:
             self.add_dns_record()
 
+    def absent(self):
+        if self.module.params["record_id"]:
+            self.delete_dns_record()
+        else:
+            self.delete_zone()
+
     def update(self):
         """use to update exisiting DNS record"""
         if not self.get_domain():
@@ -130,14 +136,16 @@ class AnsibleSitehostDNS:
         body["name"]=self.module.params["name"]
         body["content"]=self.module.params["content"]
 
-        self.sh_api.api_query(path="/dns/add_record.json", method="POST", data=body)
+        add_result = self.sh_api.api_query(path="/dns/add_record.json", method="POST", data=body)
+        if not add_result['status']: #  adding failed due to incorrect parameters
+            self.module.fail_json(msg=add_result['msg'])
 
         # get the DNS record to show in output of module
         listofrecords = self.sh_api.api_query(path="/dns/list_records.json", method="GET", query_params={"domain":self.module.params["domain"]})["return"]
         listofrecords = filter(lambda x:x["name"]==self.module.params["name"],listofrecords)
         new_record = max(listofrecords, key = lambda x:int(x["change_date"]))
         
-        self.result["msg"]="DNS record created"
+        self.result["msg"]=f"DNS record created with id: {new_record['id']}"
         self.result["DNS"]=new_record
         self.module.exit_json(**self.result)
 
@@ -151,10 +159,24 @@ class AnsibleSitehostDNS:
         apiresult = self.sh_api.api_query(path="/dns/create_domain.json",method="POST", data=body)
 
         return apiresult
+    
+    def delete_dns_record(self):
+        """deletes a DNS record"""
+        if not self.get_domain():
+            self.module.fail_json(msg="ERROR: DNS zone does not exist.")
+        record_to_delete = self.get_record_by_id()
+        if not record_to_delete:
+            self.module.fail_json(msg="ERROR: DNS Record does not exist.")
 
+        # delete the dns record
+        body=OrderedDict()
+        body["domain"]=self.module.params["domain"]
+        body["record_id"]=self.module.params["record_id"]
+        self.sh_api.api_query(path="/dns/delete_record.json", method="POST", data=body)
 
-    def absent(self):
-        pass
+        self.result["msg"]="DNS record deleted"
+        self.module.exit_json(**self.result)
+
 
     def get_record_by_id(self,recordid=None):
         """get the DNS record by ID"""
