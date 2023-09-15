@@ -187,11 +187,8 @@ class AnsibleSitehostServer:
     def absent(self):
         """deletes a server"""
         server_to_delete = self.get_server_by_name()
-        if not server_to_delete:  # server does not exist, so just skip and continue
-            self.result["skipped"] = True
-            self.module.exit_json(
-                msg="Server does not exist, skipping task.", **self.result
-            )
+        if not server_to_delete:  # server does not exist, so just continue
+            self.module.exit_json( msg="Server does not exist", **self.result )
 
         #  check mode
         if self.module.check_mode:
@@ -265,13 +262,12 @@ class AnsibleSitehostServer:
 
         # if server is the requested state already, skip task
         if server_state_map[current_server_state] == requested_server_state:
-            self.result["skipped"] = True
             self.result["msg"] = (
-                f"server already {server_state_map[current_server_state]}, skipped task",
+                f"server already {server_state_map[current_server_state]}",
             )
             self.result["server"] = {
                 "name": self.module.params["name"],
-                "label": server_to_change_state["return"]["label"],
+                "label": server_to_change_state["label"],
                 "state": current_server_state,
             }
             self.module.exit_json(**self.result)
@@ -353,8 +349,7 @@ class AnsibleSitehostServer:
         # check if server plan is same as inputed product code
         if server_to_upgrade["product_code"] == self.module.params["product_code"]:
             self.module.exit_json(
-                skipped=True,
-                msg="Requested product is the same as current server product, skipping.",
+                msg="Requested product is the same as current server product.",
             )
 
         #  check mode
