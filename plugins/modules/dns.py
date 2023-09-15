@@ -87,6 +87,8 @@ class AnsibleSitehostDNS:
     def update_or_add(self):
         if self.module.params["record_id"]:
             self.update()
+        elif not self.module.params["name"]:
+            self.create_domain()
         else:
             self.add_dns_record()
 
@@ -94,7 +96,7 @@ class AnsibleSitehostDNS:
         if self.module.params["record_id"]:
             self.delete_dns_record()
         else:
-            self.delete_zone()
+            self.delete_domain()
 
     def update(self):
         """use to update exisiting DNS record"""
@@ -120,6 +122,7 @@ class AnsibleSitehostDNS:
         
         self.result["msg"] = "DNS record sucessfully updated"
         self.result["DNS"] = self.get_record_by_id()
+        self.result["changed"]=True
         self.module.exit_json(**self.result)
 
 
@@ -147,6 +150,7 @@ class AnsibleSitehostDNS:
         
         self.result["msg"]=f"DNS record created with id: {new_record['id']}"
         self.result["DNS"]=new_record
+        self.result["changed"]=True
         self.module.exit_json(**self.result)
 
     def create_zone(self,domain=None):
@@ -159,6 +163,34 @@ class AnsibleSitehostDNS:
         apiresult = self.sh_api.api_query(path="/dns/create_domain.json",method="POST", data=body)
 
         return apiresult
+    
+    def delete_domain(self):
+        """delete DNS zones"""
+        domain_to_delete = self.get_domain()
+        if not domain_to_delete:
+            self.module.exit_json(msg="Specified DNS zone does not exist")
+
+        # delete the zone
+        body=OrderedDict()
+        body["domain"]=self.module.params["domain"]
+
+        self.sh_api.api_query(path="/dns/delete_domain.json", method="POST", data=body)
+
+        self.module.exit_json(msg="DNS zone deleted",changed=True)
+
+    def create_domain(self):
+        """create a new DNS zone only, when there is no DNS records specified"""
+        if self.get_domain():
+            self.module.exit_json(msg="DNS zone already exist")
+        create_result = self.create_zone()
+
+        if not create_result["status"]:
+            self.module.fail_json(msg=create_result["msg"])
+        
+        self.result["msg"]=f"DNS zone \"{self.module.params['domain']}\" created"
+        self.result["changed"]=True
+
+        self.module.exit_json(**self.result)
     
     def delete_dns_record(self):
         """deletes a DNS record"""
@@ -175,6 +207,7 @@ class AnsibleSitehostDNS:
         self.sh_api.api_query(path="/dns/delete_record.json", method="POST", data=body)
 
         self.result["msg"]="DNS record deleted"
+        self.result["changed"]=True
         self.module.exit_json(**self.result)
 
 
