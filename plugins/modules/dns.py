@@ -86,7 +86,7 @@ class AnsibleSitehostDNS:
     
     def update_or_add(self):
         if self.module.params["record_id"]:
-            self.update()
+            self.update_dns_record()
         elif not self.module.params["name"]:
             self.create_domain()
         else:
@@ -98,8 +98,12 @@ class AnsibleSitehostDNS:
         else:
             self.delete_domain()
 
-    def update(self):
+    def update_dns_record(self):
         """use to update exisiting DNS record"""
+        #  check mode 
+        if self.module.check_mode: 
+           self.module.exit_json(changed=True)
+
         if not self.get_domain():
             self.module.fail_json(msg="ERROR: DNS zone does not exist.")
         record_to_modify = self.get_record_by_id()
@@ -128,6 +132,10 @@ class AnsibleSitehostDNS:
 
     def add_dns_record(self):
         """add DNS record, will create DNS zone if does not exist"""
+        # check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         # create DNS zone if it does not exist
         if not self.get_domain():
             self.create_zone(self.module.params["domain"])
@@ -155,6 +163,10 @@ class AnsibleSitehostDNS:
 
     def create_zone(self,domain=None):
         """create a DNS zone"""
+        # check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         if domain is None:
             domain = self.module.params["domain"]
         
@@ -166,6 +178,10 @@ class AnsibleSitehostDNS:
     
     def delete_domain(self):
         """delete DNS zones"""
+        # check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+            
         domain_to_delete = self.get_domain()
         if not domain_to_delete:
             self.module.exit_json(msg="Specified DNS zone does not exist")
@@ -182,6 +198,11 @@ class AnsibleSitehostDNS:
         """create a new DNS zone only, when there is no DNS records specified"""
         if self.get_domain():
             self.module.exit_json(msg="DNS zone already exist")
+
+        # check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         create_result = self.create_zone()
 
         if not create_result["status"]:
@@ -194,6 +215,10 @@ class AnsibleSitehostDNS:
     
     def delete_dns_record(self):
         """deletes a DNS record"""
+        # check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         if not self.get_domain():
             self.module.fail_json(msg="ERROR: DNS zone does not exist.")
         record_to_delete = self.get_record_by_id()
@@ -226,8 +251,9 @@ class AnsibleSitehostDNS:
         if zone is None:
             zone = self.module.params["domain"]
         
-        retrieved_zone=self.sh_api.api_query(path="/dns/search_domains.json", method='POST', query_params = OrderedDict({"query[domain]":zone}))["return"]
-
+        body = OrderedDict()
+        body["query[domain]"] = zone
+        retrieved_zone=self.sh_api.api_query(path="/dns/search_domains.json", method='POST', data=body)["return"]
         return retrieved_zone if retrieved_zone else None
     
     def format_parameters(self):
@@ -244,7 +270,7 @@ def main():
     argument_spec = SitehostAPI.sitehost_argument_spec()
     argument_spec.update(
         dict(
-            domain=dict(type="str"),
+            domain=dict(type="str", required=True, aliases=["zone", "dns_zone"]),
             record_id=dict(type="int"),
             name=dict(type="str"),
             type=dict(
@@ -253,12 +279,15 @@ def main():
             ),
             priority=dict(type="int"),
             content=dict(type="str"),
-            state=dict(type="str", choices=["present","absent"]),
+            state=dict(type="str", choices=["present","absent"], required=True),
         )
     )
 
     module = AnsibleModule(
         argument_spec=argument_spec,
+        required_together=("name","type", "content"),
+        
+        supports_check_mode=True,
     )
     
     sitehost_api = SitehostAPI(
