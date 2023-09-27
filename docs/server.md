@@ -5,7 +5,8 @@
 </p>
 
 # sitehost.cloud.server
-Manages SiteHost Server Instance. Make sure to checkout our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API.
+Manages SiteHost Server Instance. Make sure to checkout our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure that the `Servers & Cloud Containers: Server` and `Servers & Cloud Containers: Job` privilege is enabled your your SiteHost api key.
+
 - [parameters](#parameter)
 - [examples](#examples)
 - [return](#return-values)

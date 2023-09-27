@@ -2,72 +2,140 @@
 
 # Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
-from __future__ import (absolute_import, division, print_function)
+from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
-# DOCUMENTATION = r'''
-# ---
-# module: my_test
+DOCUMENTATION = r"""
+---
+module: dns
 
-# short_description: This is my test module
+short_description: Manage DNS zones and records
 
-# # If this is part of a collection, you need to use semantic versioning,
-# # i.e. the version is of the form "2.5.0" and not "2.4".
-# version_added: "1.0.0"
+version_added: "1.0.1"
 
-# description: This is my longer description explaining my test module.
+description: Used for creating, deleting and updating DNS records and DNS zones on your SiteHost accout.
 
-# options:
-#     name:
-#         description: This is the message to send to the test module.
-#         required: true
-#         type: str
-#     new:
-#         description:
-#             - Control to demo if the result of this module is changed or not.
-#             - Parameter description can be a list as well.
-#         required: false
-#         type: bool
-# # Specify this value according to your collection
-# # in format of namespace.collection.doc_fragment_name
-# extends_documentation_fragment:
-#     - my_namespace.my_collection.my_doc_fragment_name
+author:
+  - "SiteHost Developers (developers@sitehost.co.nz)"
 
-# author:
-#     - Your Name (@yourGitHubHandle)
-# '''
+options:
+    state:
+        description: 
+            - Desired state of the DNS zone / record.
+            - C(present) will either upgrade or create a DNS zone or record.
+            - C(absent) will delete a DNS zone or record.
+        required: true
+        type: str
+    domain:
+        description:
+            - The selected DNS zone.
+            - If DNS zone does not exist when adding a new DNS record, it will be automatically created.
+        required: True
+        type: str
+        aliases: 
+            - zone
+            - dns_zone
+    record_id:
+        description:
+            - The id of an exisiting DNS record to update or delete.
+        type: int
+    name:
+        description:
+            - The host name, alias, or service being defined by the record.
+            - Please use the FQDN instead of relative names like C(@) or C(www)
+        type: str
+    type:
+        description:
+            - The type of record you would like to use.
+        choices: [A,AAAA,CNAME,MX,TXT,CAA,SRV]
+        type: str
+    priority:
+        description:
+            - The priority of the host for C(SRV,MX) records.
+        type: int
+    content:
+        description:
+            - This is the value of the record, depending on the record type.
+        type: str
+"""
 
-# EXAMPLES = r'''
-# # Pass in a message
-# - name: Test with a message
-#   my_namespace.my_collection.my_test:
-#     name: hello world
+EXAMPLES = r"""
+# Create a DNS record and print the record id
+- name: create an A dns record for @
+    sitehost.cloud.dns:
+        domain: mydomain.co.nz
+        type: A
+        name: mydomain.co.nz
+        content: 255.255.255.255
+        api_client_id: "{{ CLIENT_ID }}"
+        api_key: "{{ USER_API_KEY }}"
+        state: present
+    register: recordouput
 
-# # pass in a message and have changed true
-# - name: Test with a message and changed output
-#   my_namespace.my_collection.my_test:
-#     name: hello world
-#     new: true
+- name: print the record id
+    ansible.builtin.debug:
+        var: recordouput.dns.id
 
-# # fail the module
-# - name: Test failure of the module
-#   my_namespace.my_collection.my_test:
-#     name: fail me
-# '''
+# Update a previously created dns record
+- name: update previously created record
+    sitehost.cloud.dns:
+        domain: mydomain.co.nz
+        record_id: 1234567
+        type: A
+        name: new.mydomain.co.nz
+        content: 255.255.255.254
+        api_client_id: "{{ CLIENT_ID }}"
+        api_key: "{{ USER_API_KEY }}"
+        state: present
 
-# RETURN = r'''
-# # These are examples of possible return values, and in general should use other names for return values.
-# original_message:
-#     description: The original name param that was passed in.
-#     type: str
-#     returned: always
-#     sample: 'hello world'
-# message:
-#     description: The output message that the test module generates.
-#     type: str
-#     returned: always
-#     sample: 'goodbye'
-# '''
+# Delete a previously created DNS record
+- name: Delete dns record
+    sitehost.cloud.dns:
+        domain: mydomain.co.nz
+        record_id: 1234567
+        api_client_id: "{{ CLIENT_ID }}"
+        api_key: "{{ USER_API_KEY }}"
+        state: absent
+
+# create a DNS zone without adding any records
+- name: create DNS zone
+    sitehost.cloud.dns:
+        domain: newdomain.com
+        api_client_id: "{{ CLIENT_ID }}"
+        api_key: "{{ USER_API_KEY }}"
+        state: present
+
+# delete a DNS zone
+- name: delete DNS zone
+    sitehost.cloud.dns:
+        domain: newdomain.com
+        api_client_id: "{{ CLIENT_ID }}"
+        api_key: "{{ USER_API_KEY }}"
+        state: absent
+"""
+
+RETURN = r"""
+dns:
+    description: The dns record being created or modified.
+    type: dict
+    returned: success
+    sample: {
+        "change_date": "1695252962",
+        "content": 255.255.255.255",
+        "id": "1234567",
+        "name": "www.mydomain.co.nz",
+        "prio": "0",
+        "state": "0",
+        "ttl": "3600",
+        "type": "A"
+    }
+msg:
+    description: A short messages showing the state of the module execution.
+    type: str
+    returned: always
+    sample: "DNS record created with id: 1234567"
+"""
 
 from collections import OrderedDict  # noqa: E402
 
@@ -75,15 +143,16 @@ from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
 from ..module_utils.sitehost import SitehostAPI  # noqa: E402
 
+
 class AnsibleSitehostDNS:
     def __init__(self, module, api):
         self.sh_api = api
         self.module = module
         self.result = {
             "changed": False,
-            "DNS": dict(),
+            "dns": dict(),
         }
-    
+
     def update_or_add(self):
         if self.module.params["record_id"]:
             self.update_dns_record()
@@ -100,9 +169,9 @@ class AnsibleSitehostDNS:
 
     def update_dns_record(self):
         """use to update exisiting DNS record"""
-        #  check mode 
-        if self.module.check_mode: 
-           self.module.exit_json(changed=True)
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         if not self.get_domain():
             self.module.fail_json(msg="ERROR: DNS zone does not exist.")
@@ -111,24 +180,25 @@ class AnsibleSitehostDNS:
             self.module.fail_json(msg="ERROR: DNS Record does not exist.")
 
         # update the DNS record
-        body=OrderedDict()
-        body['domain']=self.module.params["domain"]
-        body['record_id']=self.module.params["record_id"]
-        body['type']=self.module.params["type"]
-        body['name']=self.module.params['name']
-        body['content']=self.module.params['content']
-        body["prio"]=self.module.params['priority']
+        body = OrderedDict()
+        body["domain"] = self.module.params["domain"]
+        body["record_id"] = self.module.params["record_id"]
+        body["type"] = self.module.params["type"]
+        body["name"] = self.module.params["name"]
+        body["content"] = self.module.params["content"]
+        body["prio"] = self.module.params["priority"]
 
-        update_result = self.sh_api.api_query(path="/dns/update_record.json", method="POST", data=body)
-        
-        if not update_result['status']: #  update failed due to incorrect parameters
-            self.module.fail_json(msg=update_result['msg'])
-        
+        update_result = self.sh_api.api_query(
+            path="/dns/update_record.json", method="POST", data=body
+        )
+
+        if not update_result["status"]:  #  update failed due to incorrect parameters
+            self.module.fail_json(msg=update_result["msg"])
+
         self.result["msg"] = "DNS record sucessfully updated"
-        self.result["DNS"] = self.get_record_by_id()
-        self.result["changed"]=True
+        self.result["dns"] = self.get_record_by_id()
+        self.result["changed"] = True
         self.module.exit_json(**self.result)
-
 
     def add_dns_record(self):
         """add DNS record, will create DNS zone if does not exist"""
@@ -141,27 +211,35 @@ class AnsibleSitehostDNS:
             self.create_zone(self.module.params["domain"])
 
         # create the DNS record
-        body=OrderedDict()
-        body["domain"]=self.module.params["domain"]
-        body["type"]=self.module.params["type"]
-        body["name"]=self.module.params["name"]
-        body["content"]=self.module.params["content"]
+        body = OrderedDict()
+        body["domain"] = self.module.params["domain"]
+        body["type"] = self.module.params["type"]
+        body["name"] = self.module.params["name"]
+        body["content"] = self.module.params["content"]
 
-        add_result = self.sh_api.api_query(path="/dns/add_record.json", method="POST", data=body)
-        if not add_result['status']: #  adding failed due to incorrect parameters
-            self.module.fail_json(msg=add_result['msg'])
+        add_result = self.sh_api.api_query(
+            path="/dns/add_record.json", method="POST", data=body
+        )
+        if not add_result["status"]:  #  adding failed due to incorrect parameters
+            self.module.fail_json(msg=add_result["msg"])
 
         # get the DNS record to show in output of module
-        listofrecords = self.sh_api.api_query(path="/dns/list_records.json", method="GET", query_params={"domain":self.module.params["domain"]})["return"]
-        listofrecords = filter(lambda x:x["name"]==self.module.params["name"],listofrecords)
-        new_record = max(listofrecords, key = lambda x:int(x["change_date"]))
-        
-        self.result["msg"]=f"DNS record created with id: {new_record['id']}"
-        self.result["DNS"]=new_record
-        self.result["changed"]=True
+        listofrecords = self.sh_api.api_query(
+            path="/dns/list_records.json",
+            method="GET",
+            query_params={"domain": self.module.params["domain"]},
+        )["return"]
+        listofrecords = filter(
+            lambda x: x["name"] == self.module.params["name"], listofrecords
+        )
+        new_record = max(listofrecords, key=lambda x: int(x["change_date"]))
+
+        self.result["msg"] = f"DNS record created with id: {new_record['id']}"
+        self.result["dns"] = new_record
+        self.result["changed"] = True
         self.module.exit_json(**self.result)
 
-    def create_zone(self,domain=None):
+    def create_zone(self, domain=None):
         """create a DNS zone"""
         # check mode
         if self.module.check_mode:
@@ -169,30 +247,32 @@ class AnsibleSitehostDNS:
 
         if domain is None:
             domain = self.module.params["domain"]
-        
-        body=OrderedDict()
-        body['domain']=self.module.params["domain"]
-        apiresult = self.sh_api.api_query(path="/dns/create_domain.json",method="POST", data=body)
+
+        body = OrderedDict()
+        body["domain"] = self.module.params["domain"]
+        apiresult = self.sh_api.api_query(
+            path="/dns/create_domain.json", method="POST", data=body
+        )
 
         return apiresult
-    
+
     def delete_domain(self):
         """delete DNS zones"""
         # check mode
         if self.module.check_mode:
             self.module.exit_json(changed=True)
-            
+
         domain_to_delete = self.get_domain()
         if not domain_to_delete:
             self.module.exit_json(msg="Specified DNS zone does not exist")
 
         # delete the zone
-        body=OrderedDict()
-        body["domain"]=self.module.params["domain"]
+        body = OrderedDict()
+        body["domain"] = self.module.params["domain"]
 
         self.sh_api.api_query(path="/dns/delete_domain.json", method="POST", data=body)
 
-        self.module.exit_json(msg="DNS zone deleted",changed=True)
+        self.module.exit_json(msg="DNS zone deleted", changed=True)
 
     def create_domain(self):
         """create a new DNS zone only, when there is no DNS records specified"""
@@ -207,12 +287,12 @@ class AnsibleSitehostDNS:
 
         if not create_result["status"]:
             self.module.fail_json(msg=create_result["msg"])
-        
-        self.result["msg"]=f"DNS zone \"{self.module.params['domain']}\" created"
-        self.result["changed"]=True
+
+        self.result["msg"] = f"DNS zone \"{self.module.params['domain']}\" created"
+        self.result["changed"] = True
 
         self.module.exit_json(**self.result)
-    
+
     def delete_dns_record(self):
         """deletes a DNS record"""
         # check mode
@@ -226,44 +306,51 @@ class AnsibleSitehostDNS:
             self.module.fail_json(msg="ERROR: DNS Record does not exist.")
 
         # delete the dns record
-        body=OrderedDict()
-        body["domain"]=self.module.params["domain"]
-        body["record_id"]=self.module.params["record_id"]
+        body = OrderedDict()
+        body["domain"] = self.module.params["domain"]
+        body["record_id"] = self.module.params["record_id"]
         self.sh_api.api_query(path="/dns/delete_record.json", method="POST", data=body)
 
-        self.result["msg"]="DNS record deleted"
-        self.result["changed"]=True
+        self.result["msg"] = "DNS record deleted"
+        self.result["changed"] = True
         self.module.exit_json(**self.result)
 
-
-    def get_record_by_id(self,recordid=None):
+    def get_record_by_id(self, recordid=None):
         """get the DNS record by ID"""
         if recordid is None:
-            recordid=self.module.params["record_id"]
+            recordid = self.module.params["record_id"]
 
-        retrieved_records=self.sh_api.api_query(path="/dns/list_records.json", method='GET', query_params = OrderedDict({"domain":self.module.params["domain"]}))
-        dns_record = [record for record in retrieved_records["return"] if record["id"] == str(recordid)]
+        retrieved_records = self.sh_api.api_query(
+            path="/dns/list_records.json",
+            method="GET",
+            query_params=OrderedDict({"domain": self.module.params["domain"]}),
+        )
+        dns_record = [
+            record
+            for record in retrieved_records["return"]
+            if record["id"] == str(recordid)
+        ]
 
         return dns_record if dns_record else None
-    
+
     def get_domain(self, zone=None):
         """get the DNS zone given by domain parameters"""
         if zone is None:
             zone = self.module.params["domain"]
-        
+
         body = OrderedDict()
         body["query[domain]"] = zone
-        retrieved_zone=self.sh_api.api_query(path="/dns/search_domains.json", method='POST', data=body)["return"]
+        retrieved_zone = self.sh_api.api_query(
+            path="/dns/search_domains.json", method="POST", data=body
+        )["return"]
         return retrieved_zone if retrieved_zone else None
-    
+
     def format_parameters(self):
         """ensures that the parameters are lower case"""
         if self.module.params["domain"]:
             self.module.params["domain"] = self.module.params["domain"].lower()
         if self.module.params["name"]:
             self.module.params["name"] = self.module.params["name"].lower()
-    
-    
 
 
 def main():
@@ -274,22 +361,26 @@ def main():
             record_id=dict(type="int"),
             name=dict(type="str"),
             type=dict(
-                type="str", 
-                choices=["A","AAAA","CNAME","MX","TXT","CAA","SRV"],
+                type="str",
+                choices=["A", "AAAA", "CNAME", "MX", "TXT", "CAA", "SRV"],
             ),
             priority=dict(type="int"),
             content=dict(type="str"),
-            state=dict(type="str", choices=["present","absent"], required=True),
+            state=dict(
+                type="str",
+                choices=["present", "absent"],
+                default="present",
+                required=True,
+            ),
         )
     )
 
     module = AnsibleModule(
         argument_spec=argument_spec,
-        required_together=("name","type", "content"),
-        
+        required_together=("name", "type", "content"),
         supports_check_mode=True,
     )
-    
+
     sitehost_api = SitehostAPI(
         module=module,
         api_key=module.params["api_key"],
@@ -306,8 +397,7 @@ def main():
         sitehostdns.update_or_add()
     else:  # state is absent
         sitehostdns.absent()
-        
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-

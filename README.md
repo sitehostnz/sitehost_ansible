@@ -53,3 +53,4 @@ In order to use this collection, the `SH_API_KEY` and `SH_CLIENT_ID` enviornment
 |Name| description|
 |----|------------|
 |[sitehost.cloud.server](./docs/server.md)| Manages SiteHost virtual server|
+|[sitehost.cloud.dns](./docs/dns.md)| manages SiteHost DNS records and zones|
