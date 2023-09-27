@@ -186,7 +186,7 @@ class AnsibleSitehostServer:
 
     def absent(self):
         """deletes a server"""
-        server_to_delete = self.get_server_by_name()
+        server_to_delete = self._get_server_by_name()
         if not server_to_delete:  # server does not exist, so just continue
             self.module.exit_json( msg="Server does not exist", **self.result )
 
@@ -217,7 +217,7 @@ class AnsibleSitehostServer:
     def handle_power_status(self):
         """this handles starting, stopping, and restarting servers"""
         # check if the server exist
-        server_to_change_state = self.get_server_by_name()
+        server_to_change_state = self._get_server_by_name()
         if not server_to_change_state:
             #  check mode, server might not be created yet
             if self.module.check_mode:
@@ -292,7 +292,7 @@ class AnsibleSitehostServer:
         self.result["server"] = {
             "label": server_to_change_state["label"],
             "name": self.module.params["name"],
-            "state": self.get_server_by_name()["state"],
+            "state": self._get_server_by_name()["state"],
         }
 
         self.module.exit_json(**self.result)
@@ -323,7 +323,7 @@ class AnsibleSitehostServer:
                 job_id=resource["return"]["job_id"], state="Completed"
             )
 
-        self.result["server"] = self.get_server_by_name(resource["return"]["name"])
+        self.result["server"] = self._get_server_by_name(resource["return"]["name"])
         self.result["server"]["password"] = resource["return"]["password"]
         self.result["msg"] = (
             f"server created: {resource['return']['name']},"
@@ -338,7 +338,7 @@ class AnsibleSitehostServer:
         upgrades the server, called when server name is provided and server exists
         It will first stage the upgrade then commit the upgrade with the api, restarts server
         """
-        server_to_upgrade = self.get_server_by_name()
+        server_to_upgrade = self._get_server_by_name()
         # check if the server exist
         if not server_to_upgrade:
             # check mode, the server may had been created earlier
@@ -373,7 +373,7 @@ class AnsibleSitehostServer:
 
         self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
 
-        server_after_upgrade = self.get_server_by_name()
+        server_after_upgrade = self._get_server_by_name()
 
         self.result["msg"] = f"{server_after_upgrade['name']} sucessfully upgraded"
         self.result["server"] = server_after_upgrade
@@ -391,7 +391,7 @@ class AnsibleSitehostServer:
         else:  # something is wrong with the code
             self.module.fail_json(msg="ERROR: no name or label given, exiting")
 
-    def get_server_by_name(self, server_name=None):
+    def _get_server_by_name(self, server_name=None):
         """return a server by its server name"""
         if server_name is None:
             server_name = self.module.params.get("name")
