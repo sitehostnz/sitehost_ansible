@@ -6,6 +6,10 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+DNS_TYPE_LIST = ["A", "AAAA", "CNAME", "MX", "TXT", "CAA", "SRV"]
+HTTP_GET = "GET"
+HTTP_POST = "POST"
+
 DOCUMENTATION = r"""
 ---
 module: dns
@@ -193,7 +197,7 @@ class AnsibleSitehostDNS:
         body["prio"] = self.module.params["priority"]
 
         update_result = self.sh_api.api_query(
-            path="/dns/update_record.json", method="POST", data=body
+            path="/dns/update_record.json", method=HTTP_POST, data=body
         )
 
         if not update_result["status"]:  #  update failed due to incorrect parameters
@@ -222,7 +226,7 @@ class AnsibleSitehostDNS:
         body["content"] = self.module.params["content"]
 
         add_result = self.sh_api.api_query(
-            path="/dns/add_record.json", method="POST", data=body
+            path="/dns/add_record.json", method=HTTP_POST, data=body
         )
         if not add_result["status"]:  #  adding failed due to incorrect parameters
             self.module.fail_json(msg=add_result["msg"])
@@ -230,7 +234,7 @@ class AnsibleSitehostDNS:
         # get the DNS record to show in output of module
         record_list = self.sh_api.api_query(
             path="/dns/list_records.json",
-            method="GET",
+            method=HTTP_GET,
             query_params={"domain": self.module.params["domain"]},
         )["return"]
         record_list = filter(
@@ -257,7 +261,7 @@ class AnsibleSitehostDNS:
         body = OrderedDict()
         body["domain"] = self.module.params["domain"]
 
-        self.sh_api.api_query(path="/dns/delete_domain.json", method="POST", data=body)
+        self.sh_api.api_query(path="/dns/delete_domain.json", method=HTTP_POST, data=body)
 
         self.module.exit_json(msg="DNS zone deleted", changed=True)
 
@@ -296,7 +300,7 @@ class AnsibleSitehostDNS:
         body = OrderedDict()
         body["domain"] = self.module.params["domain"]
         body["record_id"] = self.module.params["record_id"]
-        self.sh_api.api_query(path="/dns/delete_record.json", method="POST", data=body)
+        self.sh_api.api_query(path="/dns/delete_record.json", method=HTTP_POST, data=body)
 
         self.result["msg"] = "DNS record deleted"
         self.result["changed"] = True
@@ -309,7 +313,7 @@ class AnsibleSitehostDNS:
 
         retrieved_records = self.sh_api.api_query(
             path="/dns/list_records.json",
-            method="GET",
+            method=HTTP_GET,
             query_params=OrderedDict({"domain": self.module.params["domain"]}),
         )
         dns_record = [
@@ -328,7 +332,7 @@ class AnsibleSitehostDNS:
         body = OrderedDict()
         body["query[domain]"] = zone
         retrieved_zone = self.sh_api.api_query(
-            path="/dns/search_domains.json", method="POST", data=body
+            path="/dns/search_domains.json", method=HTTP_POST, data=body
         )["return"]
         return retrieved_zone if retrieved_zone else None
 
@@ -351,7 +355,7 @@ class AnsibleSitehostDNS:
         body = OrderedDict()
         body["domain"] = self.module.params["domain"]
         api_result = self.sh_api.api_query(
-            path="/dns/create_domain.json", method="POST", data=body
+            path="/dns/create_domain.json", method=HTTP_POST, data=body
         )
 
         return api_result
@@ -366,7 +370,7 @@ def main():
             name=dict(type="str"),
             type=dict(
                 type="str",
-                choices=["A", "AAAA", "CNAME", "MX", "TXT", "CAA", "SRV"],
+                choices=DNS_TYPE_LIST,
             ),
             priority=dict(type="int"),
             content=dict(type="str"),
