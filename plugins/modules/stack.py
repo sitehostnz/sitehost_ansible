@@ -103,6 +103,7 @@ class AnsibleSitehostStack:
             path="/cloud/stack/add.json", method=HTTP_POST, data=body
         )
 
+        # check if the operation succeeded or not
         if not api_result["status"]:
             # code 409 means that the container name/label already exist, skip task
             if "code: 409" in api_result["msg"]:
@@ -117,6 +118,29 @@ class AnsibleSitehostStack:
 
         self.result["msg"] = f"Container {self.module.params['label']} created."
         self.result["stack"] = self._get_stack()
+        self.result["changed"] = True
+
+        self.module.exit_json(**self.result)
+
+    def delete_stack(self):
+        """Deletes a Cloud Container."""
+        body = OrderedDict()
+        body["server"] = self.module.params["server"]
+        body["name"] = self.module.params["name"]
+
+        api_result = self.sh_api.api_query(
+            path="/cloud/stack/delete.json", method=HTTP_POST, data=body
+        )
+
+        # check if the container is already deleted
+        if not api_result["status"]:
+            self.module.exit_json(msg=f"Container {self.module.params['msg']} does not exist.", changed=False)
+
+        self.sh_api.wait_for_job(
+            job_id=api_result["return"]["job_id"], job_type="scheduler"
+        )
+
+        self.result["msg"] = f"Container {self.module.params['label']} deleted."
         self.result["changed"] = True
 
         self.module.exit_json(**self.result)
@@ -165,7 +189,10 @@ def main():
     state = module.params["state"]
 
     if state == "present":
-        sitehoststack.create_stack()  # temporary
+        sitehoststack.create_stack()
+    elif state == "absent":
+        sitehoststack.delete_stack()
+
 
 
 if __name__ == "__main__":
