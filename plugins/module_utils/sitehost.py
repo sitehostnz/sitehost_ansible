@@ -98,11 +98,13 @@ class SitehostAPI:
             error_code=r.status_code,
         )
 
-    def wait_for_job(self, job_id, state="Completed"):
+    def wait_for_job(self, job_id, job_type="daemon", state="Completed"):
         """
         use it to pause execution of ansible task until the job is completed
 
         :param job_id: the job id of the job to wait
+        :param job_type: Specifies the scheduler type: "scheduler" for cloud containers,
+                        or "daemon" for everything else.
         :param state: default to "Completed", the return state of when the job is consider done
         :returns: a dictionary of the job details
         """
@@ -110,13 +112,13 @@ class SitehostAPI:
             job_resource = self.api_query(
                 path="/job/get.json",
                 method="GET",
-                query_params=dict(job_id=job_id, type="daemon"),
+                query_params=dict(job_id=job_id, type=job_type),
             )
 
             job_status = job_resource.get("return")["state"]
 
             # return information on job details when it succeded
-            if ( job_status == state ):  
+            if job_status == state:
                 return job_resource["return"]
             elif job_status == "Failed":
                 self.module.fail_json(
