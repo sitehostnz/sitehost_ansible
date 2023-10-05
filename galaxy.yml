@@ -15,10 +15,5 @@ repository: "https://github.com/sitehostnz/sitehost_ansible"
 tags:
   - sitehost
   - cloud
-<<<<<<< HEAD
-version: 1.1.0
-build_ignore: ["*.tar.gz", ".github", ".venv","test*",".vscode"]
-=======
 version: 1.2.0
 build_ignore: ["*.tar.gz", ".github", ".venv","test*.*",".vscode"]
->>>>>>> 93cb381 (Started Cloud Container development.)
