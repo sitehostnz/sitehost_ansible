@@ -6,3 +6,14 @@ releases:
     fragments:
     - inital_release.yml
     release_date: '2023-08-18'
+  1.1.0:
+    changes:
+      bugfixes:
+      - Fixed an issue with server module when state is `started` or `stopped`.
+    fragments:
+    - 1-new-module.yml
+    modules:
+    - description: Manage DNS zones and records
+      name: dns
+      namespace: ''
+    release_date: '2023-09-28'
