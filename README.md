@@ -32,9 +32,11 @@ ansible-galaxy collection install sitehost.cloud
 ```
 
 ## Usage
-Once the Collection is installed, you can refrence it by its [Fully Qualified Collection Namespace (FQCN)](https://github.com/ansible-collections/overview#terminology): `sitehost.cloud.module_name`. 
+Once the Collection is installed, you can reference it by its [Fully Qualified Collection Namespace (FQCN)](https://github.com/ansible-collections/overview#terminology): `sitehost.cloud.module_name`. 
 
-In order to use this collection, the `SH_API_KEY` and `SH_CLIENT_ID` enviornment variable must be set to your SiteHost api key and client id respectively. Alternatetively, you can pass your api key and client id to the `api_key` and `api_client_id` option of the modules you are calling.
+In order to use this collection, the `SH_API_KEY` and `SH_CLIENT_ID` environment variable must be set to your SiteHost api key and client id respectively. Alternatively, you can pass your api key and client id to the `api_key` and `api_client_id` option of the modules you are calling.  
+
+Please ensure that the appropriate module permission is granted to the API key to use the relevant Ansible module.
 
 #### Example Playbook
 ```yml
@@ -53,4 +55,4 @@ In order to use this collection, the `SH_API_KEY` and `SH_CLIENT_ID` enviornment
 |Name| description|
 |----|------------|
 |[sitehost.cloud.server](./docs/server.md)| Manages SiteHost virtual server|
-|[sitehost.cloud.dns](./docs/dns.md)| manages SiteHost DNS records and zones|
+|[sitehost.cloud.dns](./docs/dns.md)| Manages SiteHost DNS records and zones|
