@@ -294,7 +294,7 @@ class AnsibleSitehostDNS:
             self.module.fail_json(msg="ERROR: DNS zone does not exist.")
         record_to_delete = self._get_record_by_id()
         if not record_to_delete:
-            self.module.fail_json(msg="ERROR: DNS Record does not exist.")
+            self.module.exit_json(msg="DNS Record does not exist.", changed=False)
 
         # delete the dns record
         body = OrderedDict()
@@ -307,7 +307,14 @@ class AnsibleSitehostDNS:
         self.module.exit_json(**self.result)
 
     def _get_record_by_id(self, record_id=None):
-        """Get the DNS record by ID."""
+        """
+        Get the DNS record by ID.
+
+        :param record_id: The dns record to retrive. If it is not set, 
+                    then use `record_id` parameter in playbook.
+        :returns: The DNS record if it exist, otherwise return none.
+        :rtype: list
+        """
         if record_id is None:
             record_id = self.module.params["record_id"]
 
@@ -325,7 +332,15 @@ class AnsibleSitehostDNS:
         return dns_record if dns_record else None
 
     def _get_domain(self, zone=None):
-        """Get the DNS zone given by domain parameters."""
+        """
+        Get the DNS zone given by domain parameters.
+
+        :param zone: The dns zone to retrive. If it is not set, 
+                    then use `domain` parameter in playbook.
+        :returns: The Zone information if it exist, otherwise
+                    return none
+        :rtype: dict
+        """
         if zone is None:
             zone = self.module.params["domain"]
 
@@ -344,7 +359,14 @@ class AnsibleSitehostDNS:
             self.module.params["name"] = self.module.params["name"].lower()
 
     def _create_zone(self, domain=None):
-        """Create a DNS zone."""
+        """
+        Create a DNS zone.
+
+        :params domain: Specifies the DNS zone to create. If it is not set,
+                    then use `domain` parameter in playbook
+        :returns: The api output.
+        :rtype: dict
+        """
         # check mode
         if self.module.check_mode:
             self.module.exit_json(changed=True)
