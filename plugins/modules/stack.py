@@ -89,6 +89,14 @@ class AnsibleSitehostStack:
             "stack": dict(),
         }
 
+    def create_or_update(self):
+        if self._get_stack():
+            # container already exist, update it
+            self.update_stack()
+        else:
+            # otherwiser create the container.
+            self.create_stack()
+
     def create_stack(self):
         """create a Cloud Container."""
 
@@ -116,7 +124,33 @@ class AnsibleSitehostStack:
             job_id=api_result["return"]["job_id"], job_type="scheduler"
         )
 
-        self.result["msg"] = f"Container {self.module.params['label']} created."
+        self.result["msg"] = f"Container {self.module.params['name']} created."
+        self.result["stack"] = self._get_stack()
+        self.result["changed"] = True
+
+        self.module.exit_json(**self.result)
+
+    def update_stack(self):
+        """Updates a Cloud Container."""
+        body = OrderedDict()
+        body["server"] = self.module.params["server"]
+        body["name"] = self.module.params["name"]
+        body["params[label]"] = self.module.params["label"]
+        body["params[docker_compose]"] = self.module.params["docker_compose"]
+
+        api_result = self.sh_api.api_query(
+            path="/cloud/stack/update.json", method=HTTP_POST, data=body
+        )
+
+        # check if update is sucessfull or not
+        if not api_result["status"]:
+            self.module.fail_json()
+
+        self.sh_api.wait_for_job(
+            job_id=api_result["return"]["job_id"], job_type="scheduler"
+        )
+
+        self.result["msg"] = f"Container f{self.module.params['name']} updated."
         self.result["stack"] = self._get_stack()
         self.result["changed"] = True
 
@@ -134,13 +168,16 @@ class AnsibleSitehostStack:
 
         # check if the container is already deleted
         if not api_result["status"]:
-            self.module.exit_json(msg=f"Container {self.module.params['msg']} does not exist.", changed=False)
+            self.module.exit_json(
+                msg=f"Container {self.module.params['msg']} does not exist.",
+                changed=False,
+            )
 
         self.sh_api.wait_for_job(
             job_id=api_result["return"]["job_id"], job_type="scheduler"
         )
 
-        self.result["msg"] = f"Container {self.module.params['label']} deleted."
+        self.result["msg"] = f"Container {self.module.params['name']} deleted."
         self.result["changed"] = True
 
         self.module.exit_json(**self.result)
@@ -189,10 +226,9 @@ def main():
     state = module.params["state"]
 
     if state == "present":
-        sitehoststack.create_stack()
+        sitehoststack.create_or_update()
     elif state == "absent":
         sitehoststack.delete_stack()
-
 
 
 if __name__ == "__main__":
