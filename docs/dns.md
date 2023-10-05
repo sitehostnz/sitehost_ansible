@@ -5,7 +5,7 @@
 </p>
 
 # sitehost.cloud.dns
-Manages SiteHost DNS records and zones. Make sure to checkout our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure the `Domains: DNS` privilege is enabled your your SiteHost api key.
+Manages SiteHost DNS records and zones. Make sure to check out our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure the `Domains: DNS` privilege is enabled for your SiteHost API key.
 
 - [parameters](#parameter)
 - [examples](#examples)
@@ -17,12 +17,12 @@ Manages SiteHost DNS records and zones. Make sure to checkout our [developer KB 
 |-----------|------|----------|------------------------------------------------------------------------------|
 | `state` | <center>`str`</center> | <center>Optional **(Default: present)**</center> | The desired state of the target.  **(Choices: `present`, `absent`)** |
 | `domain` | <center>`str`</center> | <center>**Required**</center> | The selected DNS zone. If DNS zone does not exist when adding a new DNS record, it will be automatically created.  **(Alias: `zone`, `dns_zone`)**  |
-| `record_id` | <center>`int`</center> | <center>Optional</center> | The id of an exisiting DNS record to update or delete. | 
+| `record_id` | <center>`int`</center> | <center>Optional</center> | The id of an existing DNS record to update or delete. | 
 | `name` | <center>`str`</center> | <center>Optional</center> | The host name, alias, or service being defined by the record. Please use the FQDN instead of relative names like `@` or `www`.  |
 | `type` | <center>`str`</center> | <center>Optional</center> | The type of record you would like to use. **(Choices: `A`,`AAAA`,`CNAME`,`MX`,`TXT`,`CAA`,`SRV`)**  | 
 | `priority` | <center>`int`</center> | <center>Optional</center> | The priority of the host for `SRV` and `MX` records. | 
 | `content` | <center>`str`</center> | <center>Optional</center> | This is the value of the record, depending on the record type. |
-| `api_key` | <center>`str`</center> | <center>**Required**</center> | Your SiteHost api key [generated from CP](https://kb.sitehost.nz/developers/api#creating-an-api-key). |
+| `api_key` | <center>`str`</center> | <center>**Required**</center> | Your SiteHost API key [generated from CP](https://kb.sitehost.nz/developers/api#creating-an-api-key). |
 | `api_client_id` | <center>`int`</center> | <center>**Required**</center> | The client id of your SiteHost account. |
 
 ## Examples

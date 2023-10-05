@@ -5,7 +5,7 @@
 </p>
 
 # sitehost.cloud.server
-Manages SiteHost Server Instance. Make sure to checkout our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure that the `Servers & Cloud Containers: Server` and `Servers & Cloud Containers: Job` privilege is enabled your your SiteHost api key.
+Manages SiteHost Server Instance. Make sure to checkout our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure that the `Servers & Cloud Containers: Server` and `Servers & Cloud Containers: Job` privilege is enabled your your SiteHost API key.
 
 - [parameters](#parameter)
 - [examples](#examples)
@@ -20,7 +20,7 @@ Manages SiteHost Server Instance. Make sure to checkout our [developer KB articl
 | `location` | <center>`str`</center> | <center>Optional</center> | The code for the [location](https://kb.sitehost.nz/developers/api/locations) to provision the new server at. *eg. AKLCITY*   |
 | `product_code` | <center>`str`</center> | <center>Optional</center> | The code for the [server specification](specification,https://kb.sitehost.nz/developers/api/product-codes) to use when provisioning the new server. *eg. XENLIT*|
 | `image` | <center>`str`</center> | <center>Optional</center> | The [image](https://kb.sitehost.nz/developers/api/images) to use for the new server. *eg. ubuntu-jammy-pvh.amd64*   |
-| `api_key` | <center>`str`</center> | <center>**Required**</center> | Your SiteHost api key [generated from CP](https://kb.sitehost.nz/developers/api#creating-an-api-key). |
+| `api_key` | <center>`str`</center> | <center>**Required**</center> | Your SiteHost API key [generated from CP](https://kb.sitehost.nz/developers/api#creating-an-api-key). |
 | `api_client_id` | <center>`int`</center> | <center>**Required**</center> | The client id of your SiteHost account. |
 
 
