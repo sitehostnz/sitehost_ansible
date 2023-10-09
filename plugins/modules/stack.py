@@ -124,7 +124,7 @@ class AnsibleSitehostStack:
             job_id=api_result["return"]["job_id"], job_type="scheduler"
         )
 
-        self.result["msg"] = f"Container {self.module.params['name']} created."
+        self.result["msg"] = f"Container {self.module.params['name']} created"
         self.result["stack"] = self._get_stack()
         self.result["changed"] = True
 
@@ -150,7 +150,7 @@ class AnsibleSitehostStack:
             job_id=api_result["return"]["job_id"], job_type="scheduler"
         )
 
-        self.result["msg"] = f"Container f{self.module.params['name']} updated."
+        self.result["msg"] = f"Container f{self.module.params['name']} updated"
         self.result["stack"] = self._get_stack()
         self.result["changed"] = True
 
@@ -169,7 +169,7 @@ class AnsibleSitehostStack:
         # check if the container is already deleted
         if not api_result["status"]:
             self.module.exit_json(
-                msg=f"Container {self.module.params['msg']} does not exist.",
+                msg=f"Container {self.module.params['msg']} does not exist",
                 changed=False,
             )
 
@@ -177,7 +177,7 @@ class AnsibleSitehostStack:
             job_id=api_result["return"]["job_id"], job_type="scheduler"
         )
 
-        self.result["msg"] = f"Container {self.module.params['name']} deleted."
+        self.result["msg"] = f"Container {self.module.params['name']} deleted"
         self.result["changed"] = True
 
         self.module.exit_json(**self.result)
@@ -198,7 +198,71 @@ class AnsibleSitehostStack:
             ),
         )
 
-        return retrived_container if retrived_container["status"] else None
+        return retrived_container["return"] if retrived_container["status"] else None
+
+    def handle_power_state(self):
+        """Use to start, stop and restart containers"""
+
+        if self._get_stack() is None:
+            self.module.fail_json(msg="ERROR: Specified container does not exist")
+
+        requested_stack_state = self.module.params["state"]
+
+        # always restart the server when requested
+        if requested_stack_state == "restarted":
+            body = OrderedDict()
+            body["server"] = self.module.params["server"]
+            body["name"] = self.module.params["name"]
+
+            api_result = self.sh_api.api_query(
+                path="/cloud/stack/restart.json", method=HTTP_POST, data=body
+            )
+
+            self.sh_api.wait_for_job(
+                job_id=api_result["return"]["job_id"], job_type="scheduler"
+            )
+
+            self.result["msg"] = f"Container {self.module.params['name']} restarted"
+            self.result["stack"] = self._get_stack()
+            self.result["changed"] = True
+            self.module.exit_json(**self.result)
+
+        # otherwise get the current container state to check if task can be skipped
+        current_stack_state = self._get_stack()["containers"][0]["state"]
+
+        stack_state_map = {"Up": "started", "Exit 0": "stopped"}
+
+        # the container state is the requested state already, skip task.
+        if stack_state_map[current_stack_state] == requested_stack_state:
+            self.result["msg"] = f"Container already {requested_stack_state}"
+            self.result["stack"] = self._get_stack()
+            self.module.exit_json(**self.result)
+
+        # requested container state is different from current state
+
+        body = OrderedDict()
+        body["server"] = self.module.params["server"]
+        body["name"] = self.module.params["name"]
+
+        # start or stop containers
+        if requested_stack_state == "started":
+            api_result = self.sh_api.api_query(
+                path="/cloud/stack/start.json", method=HTTP_POST, data=body
+            )
+        else:
+            api_result = self.sh_api.api_query(
+                path="/cloud/stack/stop.json", method=HTTP_POST, data=body
+            )
+
+        self.sh_api.wait_for_job(
+            job_id=api_result["return"]["job_id"], job_type="scheduler"
+        )
+        self.result[
+            "msg"
+        ] = f"Container {self.module.params['name']} {requested_stack_state}"
+        self.result["stack"] = self._get_stack()
+        self.result["changed"] = True
+        self.module.exit_json(**self.result)
 
 
 def main():
@@ -229,6 +293,8 @@ def main():
         sitehoststack.create_or_update()
     elif state == "absent":
         sitehoststack.delete_stack()
+    else:
+        sitehoststack.handle_power_state()
 
 
 if __name__ == "__main__":
