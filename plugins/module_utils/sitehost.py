@@ -84,8 +84,10 @@ class SitehostAPI:
 
         if r.status_code == HTTP_INTERNAL_SERVER_ERROR_STATUS_CODE:
             self.module.fail_json(
-                msg="An Unexcepted ERROR has occured when calling SiteHost API",
+                msg="An unexpected error has occured while calling SiteHost API",
                 path=path,
+                POST_data=data,
+                GET_params=query_params,
             )
 
         json_r = r.json()

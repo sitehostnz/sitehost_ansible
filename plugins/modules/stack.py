@@ -27,7 +27,7 @@ HTTP_POST = "POST"
 #         required: true
 #         type: str
 #     name:
-#         description: 
+#         description:
 #             - A unique Hash assigned to the server
 #             - Generate it before hand before using it.
 #         required: false
@@ -37,11 +37,17 @@ HTTP_POST = "POST"
 #         required: false
 #         type: str
 #     docker_compose:
-#         description: 
+#         description:
 #             - The docker_compose file that needs to be set when creating a server.
 #             - Check out the documentation in the L(SiteHost Ansible Github repo,https://github.com/sitehostnz/sitehost_ansible/blob/main/docs/stack.md) to learn more about setting up a docker_compose file for Cloud Containers.
 #         required: false
 #         type: yaml
+#     state:
+#         description:
+#             - Desired state of Cloud Container.
+#             - C(present) will either update or create a Cloud Container.
+#             - C(absent) will delete a Cloud Container.
+
 # '''
 
 # EXAMPLES = r'''
@@ -102,6 +108,9 @@ class AnsibleSitehostStack:
 
     def create_stack(self):
         """create a Cloud Container."""
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         body = OrderedDict()
         body["server"] = self.module.params["server"]
@@ -110,6 +119,7 @@ class AnsibleSitehostStack:
         body["enable_ssl"] = 0
         body["docker_compose"] = self.module.params["docker_compose"]
 
+        # creates Cloud Container
         api_result = self.sh_api.api_query(
             path="/cloud/stack/add.json", method=HTTP_POST, data=body
         )
@@ -135,11 +145,22 @@ class AnsibleSitehostStack:
 
     def update_stack(self):
         """Updates a Cloud Container."""
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         body = OrderedDict()
         body["server"] = self.module.params["server"]
         body["name"] = self.module.params["name"]
-        body["params[label]"] = self.module.params["label"]
-        body["params[docker_compose]"] = self.module.params["docker_compose"]
+
+        if self.module.params.get("label"):  #  update label if defined
+            body["params[label]"] = self.module.params["label"]
+            self.result["changed"] = True
+        if self.module.params.get(
+            "docker_compose"
+        ):  #  update docker_compose if defined
+            body["params[docker_compose]"] = self.module.params["docker_compose"]
+            self.result["changed"] = True
 
         api_result = self.sh_api.api_query(
             path="/cloud/stack/update.json", method=HTTP_POST, data=body
@@ -147,29 +168,30 @@ class AnsibleSitehostStack:
 
         # check if update is successful or not
         if not api_result["status"]:
-            # code 409 means that the container name/label already exist, skip task
-            if "code: 409" in api_result["msg"]:
-                self.module.exit_json(msg=api_result["msg"], changed=False)
-
-            # otherwise other error occured.
             self.module.fail_json(msg=api_result["msg"])
 
-        self.sh_api.wait_for_job(
-            job_id=api_result["return"]["job_id"], job_type="scheduler"
-        )
+        # if a scheduler job is created, wait for it
+        if api_result.get("return"):
+            self.sh_api.wait_for_job(
+                job_id=api_result["return"]["job_id"], job_type="scheduler"
+            )
 
         self.result["msg"] = f"Container {self.module.params['name']} updated"
         self.result["stack"] = self._get_stack()
-        self.result["changed"] = True
 
         self.module.exit_json(**self.result)
 
     def delete_stack(self):
         """Deletes a Cloud Container."""
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
+
         body = OrderedDict()
         body["server"] = self.module.params["server"]
         body["name"] = self.module.params["name"]
 
+        # deletes the Cloud Container
         api_result = self.sh_api.api_query(
             path="/cloud/stack/delete.json", method=HTTP_POST, data=body
         )
@@ -218,13 +240,20 @@ class AnsibleSitehostStack:
     def handle_power_state(self):
         """Use to start, stop and restart containers"""
 
+        # check if the container exist
         if self._get_stack() is None:
+            #  check mode, container might not be created yet
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
             self.module.fail_json(msg="ERROR: Specified container does not exist")
 
         requested_stack_state = self.module.params["state"]
 
-        # always restart the server when requested
+        # always restart the container when requested
         if requested_stack_state == "restarted":
+            #  check mode
+            if self.module.check_mode:
+                self.module.exit_json(changed=True)
             body = OrderedDict()
             body["server"] = self.module.params["server"]
             body["name"] = self.module.params["name"]
@@ -253,7 +282,11 @@ class AnsibleSitehostStack:
             self.result["stack"] = self._get_stack()
             self.module.exit_json(**self.result)
 
-        # requested container state is different from current state
+        ## requested container state is different from current state
+
+        #  check mode
+        if self.module.check_mode:
+            self.module.exit_json(changed=True)
 
         body = OrderedDict()
         body["server"] = self.module.params["server"]
@@ -283,15 +316,20 @@ class AnsibleSitehostStack:
 def main():
     argument_spec = SitehostAPI.sitehost_argument_spec()
     argument_spec.update(
-        server=dict(type="str"),
-        name=dict(type="str"),
+        server=dict(type="str", required=True),
+        name=dict(type="str", required=True),
         label=dict(type="str"),
         docker_compose=dict(type="str"),
-        state=dict(type="str"),
+        state=dict(
+            type="str",
+            choices=["present", "absent", "started", "stopped", "restarted"],
+            default="present",
+        ),
     )
 
     module = AnsibleModule(
         argument_spec=argument_spec,
+        supports_check_mode=True,
     )
 
     sitehost_api = SitehostAPI(
