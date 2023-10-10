@@ -11,34 +11,37 @@ HTTP_POST = "POST"
 
 # DOCUMENTATION = r'''
 # ---
-# module: my_test
+# module: stack
 
-# short_description: This is my test module
+# version_added: "1.2.0"
 
-# # If this is part of a collection, you need to use semantic versioning,
-# # i.e. the version is of the form "2.5.0" and not "2.4".
-# version_added: "1.0.0"
+# short_description: Manages Cloud Containers
 
-# description: This is my longer description explaining my test module.
+# description: Used for creating, deleting, updating, starting, and stopping Cloud Containers on your SiteHost account.
+# author:
+#   - "SiteHost Developers (developers@sitehost.co.nz)"
 
 # options:
-#     name:
-#         description: This is the message to send to the test module.
+#     server:
+#         description: The Cloud Container server to operate on.
 #         required: true
 #         type: str
-#     new:
-#         description:
-#             - Control to demo if the result of this module is changed or not.
-#             - Parameter description can be a list as well.
+#     name:
+#         description: 
+#             - A unique Hash assigned to the server
+#             - Generate it before hand before using it.
 #         required: false
-#         type: bool
-# # Specify this value according to your collection
-# # in format of namespace.collection.doc_fragment_name
-# # extends_documentation_fragment:
-# #     - my_namespace.my_collection.my_doc_fragment_name
-
-# author:
-#     - Your Name (@yourGitHubHandle)
+#         type: str
+#     label:
+#         description: Name provided by the user to the server.
+#         required: false
+#         type: str
+#     docker_compose:
+#         description: 
+#             - The docker_compose file that needs to be set when creating a server.
+#             - Check out the documentation in the L(SiteHost Ansible Github repo,https://github.com/sitehostnz/sitehost_ansible/blob/main/docs/stack.md) to learn more about setting up a docker_compose file for Cloud Containers.
+#         required: false
+#         type: yaml
 # '''
 
 # EXAMPLES = r'''
@@ -142,15 +145,20 @@ class AnsibleSitehostStack:
             path="/cloud/stack/update.json", method=HTTP_POST, data=body
         )
 
-        # check if update is sucessfull or not
+        # check if update is successful or not
         if not api_result["status"]:
-            self.module.fail_json()
+            # code 409 means that the container name/label already exist, skip task
+            if "code: 409" in api_result["msg"]:
+                self.module.exit_json(msg=api_result["msg"], changed=False)
+
+            # otherwise other error occured.
+            self.module.fail_json(msg=api_result["msg"])
 
         self.sh_api.wait_for_job(
             job_id=api_result["return"]["job_id"], job_type="scheduler"
         )
 
-        self.result["msg"] = f"Container f{self.module.params['name']} updated"
+        self.result["msg"] = f"Container {self.module.params['name']} updated"
         self.result["stack"] = self._get_stack()
         self.result["changed"] = True
 
@@ -183,7 +191,14 @@ class AnsibleSitehostStack:
         self.module.exit_json(**self.result)
 
     def _get_stack(self, container_to_check=None):
-        """Get Cloud Container information."""
+        """
+        Get Cloud Container information.
+
+        :params container_to_check: select the container to get, if not provided.
+        :return: Information on the container. If container does not exist, then
+                none is returned.
+        :rtype: dict
+        """
         if container_to_check is None:
             container_to_check = self.module.params["name"]
 
@@ -244,7 +259,7 @@ class AnsibleSitehostStack:
         body["server"] = self.module.params["server"]
         body["name"] = self.module.params["name"]
 
-        # start or stop containers
+        # start or stop container
         if requested_stack_state == "started":
             api_result = self.sh_api.api_query(
                 path="/cloud/stack/start.json", method=HTTP_POST, data=body

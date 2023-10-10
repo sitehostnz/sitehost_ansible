@@ -10,6 +10,16 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 
+CLOUD_CONTAINER_SERVER_PRODUCT_CODE = [
+    "CLDCON1",
+    "CLDCON2",
+    "CLDCON4",
+    "CLDCON6",
+    "CLDCON8",
+]
+DAEMON_JOB_TYPE = "daemon"
+SCHEDULER_JOB_TYPE = "scheduler"
+
 DOCUMENTATION = """
 ---
 module: server
@@ -188,7 +198,7 @@ class AnsibleSitehostServer:
         """deletes a server"""
         server_to_delete = self._get_server_by_name()
         if not server_to_delete:  # server does not exist, so just continue
-            self.module.exit_json( msg="Server does not exist", **self.result )
+            self.module.exit_json(msg="Server does not exist", **self.result)
 
         #  check mode
         if self.module.check_mode:
@@ -312,23 +322,35 @@ class AnsibleSitehostServer:
         body["image"] = self.module.params["image"]
         body["params[ipv4]"] = "auto"
 
-        resource = self.sh_api.api_query(
+        api_result = self.sh_api.api_query(
             path="/server/provision.json",
             method="POST",
             data=body,
         )
 
-        if resource:
-            self.sh_api.wait_for_job(
-                job_id=resource["return"]["job_id"], state="Completed"
-            )
-
-        self.result["server"] = self._get_server_by_name(resource["return"]["name"])
-        self.result["server"]["password"] = resource["return"]["password"]
-        self.result["msg"] = (
-            f"server created: {resource['return']['name']},"
-            f" with user: root and password: {resource['return']['password']}"
+        job_type = (
+            SCHEDULER_JOB_TYPE
+            if self.module.params["product_code"] in CLOUD_CONTAINER_SERVER_PRODUCT_CODE
+            else DAEMON_JOB_TYPE
         )
+
+        self.sh_api.wait_for_job(
+            job_id=api_result["return"]["job_id"], job_type=job_type
+        )
+
+        if job_type == DAEMON_JOB_TYPE:  #  Non Cloud Container server provisioned
+            self.result["msg"] = (
+                f"server created: {api_result['return']['name']},"
+                f" with user: root and password: {api_result['return']['password']}"
+            )
+            self.result["server"]["password"] = api_result["return"]["password"]
+
+        else:  #  Cloud Container server provisioned
+            self.result[
+                "msg"
+            ] = f"Cloud Container server {api_result['return']['name']} created"
+
+        self.result["server"] = self._get_server_by_name(api_result["return"]["name"])
         self.result["changed"] = True
 
         self.module.exit_json(**self.result)

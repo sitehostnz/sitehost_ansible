@@ -11,6 +11,8 @@ from ansible.module_utils.basic import env_fallback, missing_required_lib
 from ansible.module_utils.six.moves.urllib.parse import quote
 
 
+HTTP_INTERNAL_SERVER_ERROR_STATUS_CODE = 500
+
 try:
     import requests
 
@@ -80,6 +82,12 @@ class SitehostAPI:
             data=data,
         )
 
+        if r.status_code == HTTP_INTERNAL_SERVER_ERROR_STATUS_CODE:
+            self.module.fail_json(
+                msg="An Unexcepted ERROR has occured when calling SiteHost API",
+                path=path,
+            )
+
         json_r = r.json()
 
         # Success with content
@@ -133,12 +141,16 @@ class SitehostAPI:
             )
 
     @staticmethod
-    def _backoff(retry, retry_max_delay=12):
-        """pause the computation for some time, based on the number of retries
-        retries are kept track by the parent wait_for_job() function
+    def _backoff(retry, retry_max_delay=60):
+        """
+        Pause the computation for some time, based on the number of retries
+        retries are kept track by the parent wait_for_job() method.
 
         Basically with every iteration of retry, the function will wait alittle longer
         until it waits for a max of retry_max_delay seconds.
+
+        :param retry: The current iteration of the delay method
+        :param retry_max_delay: The maximum allowed time to wait per iteration
         """
         randomness = random.randint(0, 1000) / 1000.0
         delay = 2**retry + randomness
