@@ -9,78 +9,171 @@ __metaclass__ = type
 HTTP_GET = "GET"
 HTTP_POST = "POST"
 
-# DOCUMENTATION = r'''
-# ---
-# module: stack
+DOCUMENTATION = r'''
+---
+module: stack
 
-# version_added: "1.2.0"
+version_added: "1.2.0"
 
-# short_description: Manages Cloud Containers
+short_description: Manages Cloud Containers
 
-# description: Used for creating, deleting, updating, starting, and stopping Cloud Containers on your SiteHost account.
-# author:
-#   - "SiteHost Developers (developers@sitehost.co.nz)"
+description: Used for creating, deleting, updating, starting, and stopping Cloud Containers on your SiteHost account.
 
-# options:
-#     server:
-#         description: The Cloud Container server to operate on.
-#         required: true
-#         type: str
-#     name:
-#         description:
-#             - A unique Hash assigned to the server
-#             - Generate it before hand before using it.
-#         required: false
-#         type: str
-#     label:
-#         description: Name provided by the user to the server.
-#         required: false
-#         type: str
-#     docker_compose:
-#         description:
-#             - The docker_compose file that needs to be set when creating a server.
-#             - Check out the documentation in the L(SiteHost Ansible Github repo,https://github.com/sitehostnz/sitehost_ansible/blob/main/docs/stack.md) to learn more about setting up a docker_compose file for Cloud Containers.
-#         required: false
-#         type: yaml
-#     state:
-#         description:
-#             - Desired state of Cloud Container.
-#             - C(present) will either update or create a Cloud Container.
-#             - C(absent) will delete a Cloud Container.
+author:
+  - "SiteHost Developers (developers@sitehost.co.nz)"
 
-# '''
+options:
+    state:
+        description:
+            - Indicates the desired state of the Cloud Container.
+            - C(present) will either update or create a Cloud Container.
+            - C(absent) will delete a Cloud Container.
+            - C(started) for powering on the container.
+            - C(stopped) for powering off the container.
+            - C(restarted) for restarting the container.
+        default: present
+        choices: [present, absent, started, stopped, restarted]
+        type: str
+    server:
+        description: 
+            - The Cloud Container server to operate on.
+        required: true
+        type: str
+    name:
+        description:
+            - A unique Hash assigned to the server
+            - L(Generate, https://docs.sitehost.nz/api/v1.2/?path=/cloud/stack/generate_name&action=GET) it before hand before using it.
+        required: false
+        type: str
+    label:
+        description: 
+            - User chosen label of the Container.
+            - The label format must be a valid FQDN.
+        required: false
+        type: str
+    docker_compose:
+        description:
+            - The docker_compose file that needs to be set when creating a server.
+            - Check out the documentation in the L(SiteHost Ansible Github repo,https://github.com/sitehostnz/sitehost_ansible/blob/main/docs/stack.md) to learn more about setting up a docker_compose file for Cloud Containers.
+        required: false
+        type: yaml
+    api_key:
+        description:
+            - Your SiteHost api key L(generated from CP,https://kb.sitehost.nz/developers/api#creating-an-api-key).
+        required: true
+        type: str
+    api_client_id:
+        description:
+            - The client id of your SiteHost account.
+        required: true
+        type: int
 
-# EXAMPLES = r'''
-# # Pass in a message
-# - name: Test with a message
-#   my_namespace.my_collection.my_test:
-#     name: hello world
+'''
 
-# # pass in a message and have changed true
-# - name: Test with a message and changed output
-#   my_namespace.my_collection.my_test:
-#     name: hello world
-#     new: true
+EXAMPLES = r'''
+# create a Cloud Container running apache + php 8.2
+- name: create a container
+  sitehost.cloud.stack:
+    server: ch-mycloudse
+    name: ccb7a31da52e5b47
+    label: mycontainer.co.nz
+    docker_compose: |
+        version: '2.1'
+        services:
+            ccb7a31da52e5b47:
+                container_name: ccb7a31da52e5b47
+                environment:
+                    - 'VIRTUAL_HOST=mycontainer.co.nz,www.mycontainer.co.nz'
+                    - CERT_NAME=mycontainer.co.nz
+                expose:
+                    - 80/tcp
+                image: 'registry.sitehost.co.nz/sitehost-php82-apache:4.0.1-jammy'
+                labels:
+                    - 'nz.sitehost.container.website.vhosts=mycontainer.co.nz,www.mycontainer.co.nz'
+                    - nz.sitehost.container.image_update=True
+                    - nz.sitehost.container.label=mycontainer.co.nz
+                    - nz.sitehost.container.type=www
+                    - nz.sitehost.container.monitored=True
+                    - nz.sitehost.container.backup_disable=False
+                restart: unless-stopped
+                volumes:
+                    - '/data/docker0/www/ccb7a31da52e5b47/crontabs:/cron:ro'
+                    - '/data/docker0/www/ccb7a31da52e5b47/application:/container/application:rw'
+                    - '/data/docker0/www/ccb7a31da52e5b47/config:/container/config:ro'
+                    - '/data/docker0/www/ccb7a31da52e5b47/logs:/container/logs:rw'
+        networks:
+            default:
+                external:
+                    name: infra_default
 
-# # fail the module
-# - name: Test failure of the module
-#   my_namespace.my_collection.my_test:
-#     name: fail me
-# '''
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: present
 
-# RETURN = r'''
-# # These are examples of possible return values, and in general should use other names for return values.
-# original_message:
-#     description: The original name param that was passed in.
-#     type: str
-#     returned: always
-#     sample: 'hello world'
-# message:
-#     description: The output message that the test module generates.
-#     type: str
-#     returned: always
-#     sample: 'goodbye'
-# '''
+# delete a Cloud Container
+- name: delete a container
+  sitehost.cloud.stack:
+    server: ch-mycloudse
+    name: ccb7a31da52e5b47
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: absent
+
+# powering up a Cloud Container
+- name: start container
+  sitehost.cloud.stack:
+    server: ch-mycloudse
+    name: ccb7a31da52e5b47
+    api_client_id: "{{ CLIENT_ID }}"
+    api_key: "{{ USER_API_KEY }}"
+    state: started
+
+'''
+
+RETURN = r'''
+# These are examples of possible return values, and in general should use other names for return values.
+msg:
+    description: A short messages showing the state of the module execution.
+    type: str
+    returned: always
+    sample: 'Container ccb7a31da52e5b47 created'
+stack:
+    description: The Cloud Container status.
+    type: dict
+    returned: success
+    sample: {
+        "client_id": "1234567",
+        "containers": [
+            {
+                "backups": true,
+                "container_id": "b3a1775335a7e9b9c85c835fa1a5973b19e67e7a7a4577121f8e879ffafecf80",
+                "date_added": "2023-10-11 15:14:52",
+                "date_updated": "2023-10-11 15:14:59",
+                "image": "registry.sitehost.co.nz/sitehost-php82-apache:4.0.1-jammy",
+                "is_missing": "0",
+                "monitored": true,
+                "name": "ccb7a31da52e5b47",
+                "pending": null,
+                "size": "0",
+                "ssl_enabled": false,
+                "state": "Up"
+            }
+        ],
+        "date_added": "2023-10-11 15:14:52",
+        "date_updated": "2023-10-11 15:14:59",
+        "docker_file": "version: '2.1'\nservices:\n    ccb7a31da52e5b47:\n        container_name: ccb7a31da52e5b47\n        environment:\n            - 'VIRTUAL_HOST=mycontainer.co.nz,www.mycontainer.co.nz'\n            - CERT_NAME=mycontainer.co.nz\n        expose:\n            - 80/tcp\n        image: 'registry.sitehost.co.nz/sitehost-php82-apache:4.0.1-jammy'\n        labels:\n            - 'nz.sitehost.container.website.vhosts=mycontainer.co.nz,www.mycontainer.co.nz'\n            - nz.sitehost.container.image_update=True\n            - nz.sitehost.container.label=mycontainer.co.nz\n            - nz.sitehost.container.type=www\n            - nz.sitehost.container.monitored=True\n            - nz.sitehost.container.backup_disable=False\n        restart: unless-stopped\n        volumes:\n            - '/data/docker0/www/ccb7a31da52e5b47/crontabs:/cron:ro'\n            - '/data/docker0/www/ccb7a31da52e5b47/application:/container/application:rw'\n            - '/data/docker0/www/ccb7a31da52e5b47/config:/container/config:ro'\n            - '/data/docker0/www/ccb7a31da52e5b47/logs:/container/logs:rw'\nnetworks:\n    default:\n        external:\n            name: infra_default\n",
+        "ip_addr_server": "255.255.255.255",
+        "is_missing": "0",
+        "label": "mycontainer.co.nz",
+        "name": "ccb7a31da52e5b47",
+        "pending": null,
+        "server_id": "12345",
+        "server_label": "my cloud server",
+        "server_name": "ch-mycloudse",
+        "server_owner": true
+    }
+
+'''
 
 from collections import OrderedDict  # noqa: E402
 

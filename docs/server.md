@@ -1,6 +1,6 @@
 <p align="center">
     <a href="https://sitehost.nz" target="_blank">
-        <img src="../.github/sitehost-logo.svg" height="130">
+        <img src="https://raw.githubusercontent.com/sitehostnz/sitehost_ansible/main/.github/sitehost-logo.svg" alt="SiteHost" height="130">
     </a>
 </p>
 
@@ -16,12 +16,12 @@ Manages SiteHost Server Instance. Make sure to checkout our [developer KB articl
 |-----------|------|----------|------------------------------------------------------------------------------|
 | `state` | <center>`str`</center> | <center>Optional **(Default: present)**</center> | The desired state of the target.  **(Choices: `present`, `absent`, `started`,`stopped`, `restarted`)** |
 | `label` | <center>`str`</center> | <center>Optional</center> | User chosen label of the new server, **mutually exclusive to `name`**.  Please ensure that verbose mode `-v` is enabled to see the password of the newly created server.  |
-| `name` | <center>`str`</center> | <center>Optional</center> | Unique auto generated machine name for server. Used to select servers that has **already present**.   |
-| `location` | <center>`str`</center> | <center>Optional</center> | The code for the [location](https://kb.sitehost.nz/developers/api/locations) to provision the new server at. *eg. AKLCITY*   |
+| `name` | <center>`str`</center> | <center>Optional</center> | Unique auto generated machine name for server. Used to select servers that are **already present**. |
+| `location` | <center>`str`</center> | <center>Optional</center> | The code for the [location](https://kb.sitehost.nz/developers/api/locations) to provision the new server at. *eg. AKLCITY* |
 | `product_code` | <center>`str`</center> | <center>Optional</center> | The code for the [server specification](specification,https://kb.sitehost.nz/developers/api/product-codes) to use when provisioning the new server. *eg. XENLIT*|
 | `image` | <center>`str`</center> | <center>Optional</center> | The [image](https://kb.sitehost.nz/developers/api/images) to use for the new server. *eg. ubuntu-jammy-pvh.amd64*   |
 | `api_key` | <center>`str`</center> | <center>**Required**</center> | Your SiteHost API key [generated from CP](https://kb.sitehost.nz/developers/api#creating-an-api-key). |
-| `api_client_id` | <center>`int`</center> | <center>**Required**</center> | The client id of your SiteHost account. |
+| `api_client_id` | <center>`int`</center> | <center>**Required**</center> | The client ID of your SiteHost account. |
 
 
 ### Restrictions
@@ -29,13 +29,15 @@ Manages SiteHost Server Instance. Make sure to checkout our [developer KB articl
 - Note that `label` is only used for creating new servers and `name` is used for selecting exisiting servers. Therefore `label` and `name` **cannot be defined at the same time**.
 - `location`, `product_code`, `image` are used only for creating new servers. Therefore they **must be present** if `label` is defined.
 
-### `api key` and `api_client_id` environment variable
+### Cloud Container servers
+To provision a Cloud Container Server, you **must** use `image: ubuntu-focal.amd64` as your image parameter. Additionally, please use one of the following code as your `product_code` argument:
+- `CLDCON1`
+- `CLDCON2`
+- `CLDCON4`
+- `CLDCON6`
+- `CLDCON8`
 
-Instead of defining the `api_key` and `api_client_id`, you can set up them up as environment variables:
-```bash
-export SH_API_KEY=your_api_key
-export SH_CLIENT_ID=your_client_id
-``` 
+For example, use `product_code: CLDCON1` for a 1 core Cloud Container Server.
 
 ## Examples
 

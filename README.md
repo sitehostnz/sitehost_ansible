@@ -56,3 +56,4 @@ Please ensure that the appropriate module permission is granted to the API key t
 |----|------------|
 |[sitehost.cloud.server](./docs/server.md)| Manages SiteHost virtual server|
 |[sitehost.cloud.dns](./docs/dns.md)| Manages SiteHost DNS records and zones|
+|[sitehost.cloud.stack](./docs/dns.md)| Manages SiteHost Cloud Containers|
