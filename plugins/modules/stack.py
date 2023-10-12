@@ -9,7 +9,7 @@ __metaclass__ = type
 HTTP_GET = "GET"
 HTTP_POST = "POST"
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: stack
 
@@ -42,7 +42,7 @@ options:
     name:
         description:
             - A unique Hash assigned to the server
-            - L(Generate, https://docs.sitehost.nz/api/v1.2/?path=/cloud/stack/generate_name&action=GET) it before hand before using it.
+            - L(Generate, https://docs.sitehost.nz/api/v1.2/?path=/cloud/stack/generate_name&action=GET) one with the API before hand before using it.
         required: false
         type: str
     label:
@@ -68,9 +68,9 @@ options:
         required: true
         type: int
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 # create a Cloud Container running apache + php 8.2
 - name: create a container
   sitehost.cloud.stack:
@@ -128,9 +128,9 @@ EXAMPLES = r'''
     api_key: "{{ USER_API_KEY }}"
     state: started
 
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 # These are examples of possible return values, and in general should use other names for return values.
 msg:
     description: A short messages showing the state of the module execution.
@@ -173,7 +173,7 @@ stack:
         "server_owner": true
     }
 
-'''
+"""
 
 from collections import OrderedDict  # noqa: E402
 
@@ -193,10 +193,10 @@ class AnsibleSitehostStack:
 
     def create_or_update(self):
         if self._get_stack():
-            # container already exist, update it
+            # If the container already exists, update its configuration.
             self.update_stack()
         else:
-            # otherwiser create the container.
+            # otherwise create a new one.
             self.create_stack()
 
     def create_stack(self):
@@ -237,7 +237,9 @@ class AnsibleSitehostStack:
         self.module.exit_json(**self.result)
 
     def update_stack(self):
-        """Updates a Cloud Container."""
+        """Updates a Cloud Container. This method updates the label and/or
+        docker_compose of an existing container based on the provided parameters.
+        """
         #  check mode
         if self.module.check_mode:
             self.module.exit_json(changed=True)
@@ -249,9 +251,7 @@ class AnsibleSitehostStack:
         if self.module.params.get("label"):  #  update label if defined
             body["params[label]"] = self.module.params["label"]
             self.result["changed"] = True
-        if self.module.params.get(
-            "docker_compose"
-        ):  #  update docker_compose if defined
+        if self.module.params.get("docker_compose"): #  update docker_compose if defined
             body["params[docker_compose]"] = self.module.params["docker_compose"]
             self.result["changed"] = True
 
@@ -310,9 +310,9 @@ class AnsibleSitehostStack:
         Get Cloud Container information.
 
         :params container_to_check: select the container to get, if not provided.
-        :return: Information on the container. If container does not exist, then
-                none is returned.
-        :rtype: dict
+        :return: Information about the container. Returns None if
+                the container doesn't exist.
+        :rtype: dict or None
         """
         if container_to_check is None:
             container_to_check = self.module.params["name"]

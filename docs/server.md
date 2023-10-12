@@ -7,11 +7,11 @@
 # sitehost.cloud.server
 Manages SiteHost Server Instance. Make sure to checkout our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure that the `Servers & Cloud Containers: Server` and `Servers & Cloud Containers: Job` privilege is enabled your your SiteHost API key.
 
-- [parameters](#parameter)
-- [examples](#examples)
-- [return](#return-values)
+- [Parameters](#parameters)
+- [Examples](#examples)
+- [Return](#return-values)
 
-## Parameter
+## Parameters
 | Field     | Type | Required | Description                                                                  |
 |-----------|------|----------|------------------------------------------------------------------------------|
 | `state` | <center>`str`</center> | <center>Optional **(Default: present)**</center> | The desired state of the target.  **(Choices: `present`, `absent`, `started`,`stopped`, `restarted`)** |

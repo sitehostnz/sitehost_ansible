@@ -7,11 +7,11 @@
 # sitehost.cloud.dns
 Manages SiteHost DNS records and zones. Make sure to check out our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure the `Domains: DNS` privilege is enabled for your SiteHost API key.
 
-- [parameters](#parameter)
-- [examples](#examples)
-- [return](#return-values)
+- [Parameters](#parameters)
+- [Examples](#examples)
+- [Return](#return-values)
 
-## Parameter
+## Parameters
 
  Field     | Type | Required | Description                                                                  |
 |-----------|------|----------|------------------------------------------------------------------------------|

@@ -7,11 +7,11 @@
 # sitehost.cloud.stack
 Manages SiteHost Cloud Containers. Make sure to check out our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure that the `Servers & Cloud Containers: Cloud` and `Servers & Cloud Containers: Job` privilege is enabled for your SiteHost API key.
 
-- [parameters](#parameter)
-- [examples](#examples)
-- [return](#return-values)
+- [Parameters](#parameters)
+- [Examples](#examples)
+- [Return](#return-values)
 
-## Parameter
+## Parameters
 | Field     | Type | Required | Description                                                                  |
 |-----------|------|----------|------------------------------------------------------------------------------|
 | `state` | <center>`str`</center> | <center>Optional **(Default: present)**</center> | The desired state of the Cloud Container.  **(Choices: `present`, `absent`, `started`,`stopped`, `restarted`)** |
@@ -64,7 +64,7 @@ You can find a `docker_compose` for the Apache + PHP 8.2 image in the [examples]
 ## Examples
 
 - Create a Cloud Container running apache + php 8.2
-> Note: In the `docker_compose` paramter, the bar (`|`) symbol is used to denote multi-line string input.
+> Note: In the `docker_compose` parameter, the bar (`|`) symbol is used to denote multi-line string input.
 ```
 - name: create a container
   sitehost.cloud.stack:
@@ -126,10 +126,10 @@ You can find a `docker_compose` for the Apache + PHP 8.2 image in the [examples]
     state: started
 ```
 
-## Return
+## Return Values
 
 - msg:
-    - description: A short messages showing the state of the module execution.
+    - description: A short message showing the state of the module execution.
     - type: str
     - returned: always
     - sample: 'Container ccb7a31da52e5b47 created'
