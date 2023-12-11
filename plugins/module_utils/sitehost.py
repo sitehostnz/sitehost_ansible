@@ -55,7 +55,7 @@ class SitehostAPI:
         skip_status_check=False,
     ):
         """
-        low level function that directly make http rquest to the sitehost api
+        low level function that directly make http request to the SiteHost api
 
             Parameters:
                 path (str): should point to the api resource such as "/server/provision.json"
@@ -95,7 +95,7 @@ class SitehostAPI:
         if r.status_code == HTTP_INTERNAL_SERVER_ERROR_STATUS_CODE:
             self.module.fail_json(
                 msg=(
-                    "An unexpected error has occured while calling SiteHost API,"
+                    "An unexpected error has occurred while calling SiteHost API,"
                     "please contact SiteHost support."
                 ),
                 path=path,
@@ -151,7 +151,7 @@ class SitehostAPI:
 
             job_status = job_resource.get("return")["state"]
 
-            # return information on job details when it succeded
+            # return information on job details when it succeeded
             if job_status == state:
                 return job_resource["return"]
             elif job_status == "Failed":
@@ -169,10 +169,10 @@ class SitehostAPI:
     @staticmethod
     def _backoff(retry, retry_max_delay=60):
         """
-        Pause the computation for some time, based on the number of retries
-        retries are kept track by the parent wait_for_job() method.
+        Pause the computation for some time, based on the number of retries.
+        Retries are kept track by the parent wait_for_job() method.
 
-        Basically with every iteration of retry, the function will wait alittle longer
+        Basically with every iteration of retry, the function will wait a little longer
         until it waits for a max of retry_max_delay seconds.
 
         :param retry: The current iteration of the delay method

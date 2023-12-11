@@ -9,7 +9,6 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-
 CLOUD_CONTAINER_SERVER_PRODUCT_CODE = [
     "CLDCON1",
     "CLDCON2",
@@ -166,6 +165,11 @@ server:
       returned: success
       type: str
       sample: Up8Da5oE60ns
+    ips:
+      description: IP addresses of the server, only returned during server creation.
+      returned: success
+      type: str list
+      sample: 12.12.23.45
     state:
       description: The state of the server after executing the command.
       return: success
@@ -176,7 +180,6 @@ server:
         - Reboot
         - Deleted
 """
-
 
 from collections import OrderedDict  # noqa: E402
 
@@ -214,13 +217,16 @@ class AnsibleSitehostServer:
 
         body = OrderedDict()
         body["name"] = server_to_delete["name"]
-        deleteresult = self.sh_api.api_query(
+        delete_result = self.sh_api.api_query(
             path="/server/delete.json",
             method="POST",
             data=body,
         )
 
-        self.sh_api.wait_for_job(job_id=deleteresult["return"]["job_id"])
+        if "return" in delete_result:
+            self.sh_api.wait_for_job(job_id=delete_result["return"]["job_id"])
+        else:
+            self.module.fail_json(msg=delete_result)
 
         self.result["changed"] = True
         self.result["msg"] = f"{server_to_delete['name']} has been deleted"
@@ -255,8 +261,8 @@ class AnsibleSitehostServer:
 
         # if server is the requested state already, skip task
         if (
-            AnsibleSitehostServer._SERVER_STATE_MAP[current_server_state]
-            == requested_server_state
+                AnsibleSitehostServer._SERVER_STATE_MAP[current_server_state]
+                == requested_server_state
         ):
             self.result["msg"] = (
                 f"server already {AnsibleSitehostServer._SERVER_STATE_MAP[current_server_state]}",
@@ -278,7 +284,11 @@ class AnsibleSitehostServer:
         state_change_job = self.sh_api.api_query(
             path="/server/change_state.json", method="POST", data=body
         )
-        self.sh_api.wait_for_job(job_id=state_change_job["return"]["job_id"])
+
+        if "return" in state_change_job:
+            self.sh_api.wait_for_job(job_id=state_change_job["return"]["job_id"])
+        else:
+            self.module.fail_json(msg=state_change_job)
 
         self.result["changed"] = True
         self.result["msg"] = f"Server {self.module.params['state']} successfully"
@@ -304,6 +314,9 @@ class AnsibleSitehostServer:
         body["product_code"] = self.module.params["product_code"]
         body["image"] = self.module.params["image"]
         body["params[ipv4]"] = "auto"
+        if self.module.params["ssh_keys"]:
+            for idx, key in enumerate(self.module.params["ssh_keys"]):
+                body[f"params[ssh_keys][{idx}]"] = key
 
         api_result = self.sh_api.api_query(
             path="/server/provision.json",
@@ -317,23 +330,28 @@ class AnsibleSitehostServer:
             else DAEMON_JOB_TYPE
         )
 
-        self.sh_api.wait_for_job(
-            job_id=api_result["return"]["job_id"], job_type=job_type
-        )
+        if "return" in api_result:
+            self.sh_api.wait_for_job(
+                job_id=api_result["return"]["job_id"], job_type=job_type
+            )
+        else:
+            self.module.fail_json(msg=api_result)
 
-        if job_type == DAEMON_JOB_TYPE:  #  Non Cloud Container server provisioned
+        if job_type == DAEMON_JOB_TYPE:  # Non Cloud Container server provisioned
             self.result["msg"] = (
                 f"server created: {api_result['return']['name']},"
                 f" with user: root and password: {api_result['return']['password']}"
             )
+            self.result["server"]["name"] = api_result["return"]["name"]
             self.result["server"]["password"] = api_result["return"]["password"]
+            self.result["server"]["ips"] = api_result["return"]["ips"]
 
-        else:  #  Cloud Container server provisioned
+        else:  # Cloud Container server provisioned
             self.result[
                 "msg"
             ] = f"Cloud Container server {api_result['return']['name']} created"
 
-        self.result["server"] = self._get_server_by_name(api_result["return"]["name"])
+        self.result["server"]["info"] = self._get_server_by_name(api_result["return"]["name"])
         self.result["changed"] = True
 
         self.module.exit_json(**self.result)
@@ -346,7 +364,7 @@ class AnsibleSitehostServer:
         server_to_upgrade = self._get_server_by_name()
         # check if the server exist
         if not server_to_upgrade:
-            # check mode, the server may had been created earlier
+            # check mode, the server may have been created earlier
             if self.module.check_mode:
                 self.module.exit_json(changed=True)
             self.module.fail_json(msg="ERROR: Server does not exist.")
@@ -365,9 +383,14 @@ class AnsibleSitehostServer:
         body = OrderedDict()
         body["name"] = self.module.params.get("name")
         body["plan"] = self.module.params.get("product_code")
-        self.sh_api.api_query(
-            path="/server/upgrade_plan.json", method="POST", data=body
+        upgrade_plan = self.sh_api.api_query(
+            path="/server/upgrade_plan.json",
+            method="POST",
+            data=body,
         )
+
+        if "status" in upgrade_plan and not upgrade_plan["status"]:
+            self.module.fail_json(msg=upgrade_plan)
 
         # commit upgrade, will restart server
         body = OrderedDict()
@@ -376,7 +399,10 @@ class AnsibleSitehostServer:
             path="/server/commit_disk_changes.json", method="POST", data=body
         )
 
-        self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
+        if "return" in upgrade_job:
+            self.sh_api.wait_for_job(upgrade_job["return"]["job_id"])
+        else:
+            self.module.fail_json(msg=upgrade_job)
 
         server_after_upgrade = self._get_server_by_name()
 
@@ -400,7 +426,7 @@ class AnsibleSitehostServer:
         """
         return basic server information by its server name
 
-        :params server_name: select the server to retrive, if not set, then it will get the server specified by the "name" parameter.
+        :params server_name: select the server to retrieve, if not set, then it will get the server specified by the "name" parameter.
         :returns: information about the server, returns None if server does not exist
         :rtype: dict or None
         """
@@ -436,6 +462,7 @@ def main():
                 ],
                 default="present",
             ),
+            ssh_keys=dict(type="list", elements="str", required=False),
         )  # type: ignore
     )
 
