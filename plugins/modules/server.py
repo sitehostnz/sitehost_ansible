@@ -186,6 +186,14 @@ from ..module_utils.sitehost import SitehostAPI  # noqa: E402
 
 
 class AnsibleSitehostServer:
+    _SERVER_STATE_MAP = {"On": "started", "Off": "stopped"}
+    # converts module user input to appropriate api call state
+    _API_STATE_MAP = {
+        "restarted": "reboot",
+        "started": "power_on",
+        "stopped": "power_off",
+    }
+
     def __init__(self, module, api):
         self.sh_api = api
         self.module = module
@@ -245,12 +253,13 @@ class AnsibleSitehostServer:
             query_params={"name": self.module.params["name"]},
         )["return"]["state"]
 
-        server_state_map = {"On": "started", "Off": "stopped"}
-
         # if server is the requested state already, skip task
-        if server_state_map[current_server_state] == requested_server_state:
+        if (
+            AnsibleSitehostServer._SERVER_STATE_MAP[current_server_state]
+            == requested_server_state
+        ):
             self.result["msg"] = (
-                f"server already {server_state_map[current_server_state]}",
+                f"server already {AnsibleSitehostServer._SERVER_STATE_MAP[current_server_state]}",
             )
             self.result["server"] = {
                 "name": self.module.params["name"],
@@ -264,13 +273,7 @@ class AnsibleSitehostServer:
 
         # the server state is different from requested state, start/stop server
 
-        # converts module user input to appropriate api call state
-        api_state_map = {
-            "restarted": "reboot",
-            "started": "power_on",
-            "stopped": "power_off",
-        }
-        body["state"] = api_state_map[requested_server_state]
+        body["state"] = AnsibleSitehostServer._API_STATE_MAP[requested_server_state]
 
         state_change_job = self.sh_api.api_query(
             path="/server/change_state.json", method="POST", data=body
@@ -394,7 +397,13 @@ class AnsibleSitehostServer:
             self.module.fail_json(msg="ERROR: no name or label given, exiting")
 
     def _get_server_by_name(self, server_name=None):
-        """return a server by its server name"""
+        """
+        return basic server information by its server name
+
+        :params server_name: select the server to retrive, if not set, then it will get the server specified by the "name" parameter.
+        :returns: information about the server, returns None if server does not exist
+        :rtype: dict or None
+        """
         if server_name is None:
             server_name = self.module.params.get("name")
 

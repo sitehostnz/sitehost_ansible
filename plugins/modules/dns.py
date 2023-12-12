@@ -304,7 +304,7 @@ class AnsibleSitehostDNS:
         :param record_id: The dns record to retrive. If it is not set,
                     then use `record_id` parameter in playbook.
         :returns: The DNS record if it exist, otherwise return none.
-        :rtype: list
+        :rtype: list or None
         """
         if record_id is None:
             record_id = self.module.params["record_id"]
@@ -330,7 +330,7 @@ class AnsibleSitehostDNS:
                     then use `domain` parameter in playbook.
         :returns: The Zone information if it exist, otherwise
                     return none
-        :rtype: dict
+        :rtype: dict or None
         """
         if zone is None:
             zone = self.module.params["domain"]

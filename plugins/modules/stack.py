@@ -184,6 +184,10 @@ from ..module_utils.sitehost import SitehostAPI  # noqa: E402
 
 
 class AnsibleSitehostStack:
+    _STACK_STATE_MAP = {"Up": "started", "Exit 0": "stopped"}
+    # converts module user input to appropriate api call state
+    _API_STATE_MAP = {"started": "start", "stopped": "stop", "restarted": "restart"}
+
     def __init__(self, module, api):
         self.sh_api = api
         self.module = module
@@ -340,10 +344,11 @@ class AnsibleSitehostStack:
         # otherwise get the current container state to check if task can be skipped
         current_stack_state = self._get_stack()["containers"][0]["state"]
 
-        stack_state_map = {"Up": "started", "Exit 0": "stopped"}
-
         # the container state is the requested state already, skip task.
-        if stack_state_map[current_stack_state] == requested_stack_state:
+        if (
+            AnsibleSitehostStack._STACK_STATE_MAP[current_stack_state]
+            == requested_stack_state
+        ):
             self.result["msg"] = f"Container already {requested_stack_state}"
             self.result["stack"] = self._get_stack()
             self.module.exit_json(**self.result)
@@ -358,12 +363,9 @@ class AnsibleSitehostStack:
         body["server"] = self.module.params["server"]
         body["name"] = self.module.params["name"]
 
-        # converts module user input to appropriate api call state
-        api_state_map = {"started": "start", "stopped": "stop", "restarted": "restart"}
-
         # start or stop container
         api_result = self.sh_api.api_query(
-            path=f"/cloud/stack/{api_state_map[requested_stack_state]}.json",
+            path=f"/cloud/stack/{AnsibleSitehostStack._API_STATE_MAP[requested_stack_state]}.json",
             method=HTTP_POST,
             data=body,
         )
