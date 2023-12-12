@@ -225,7 +225,7 @@ class AnsibleSitehostServer:
         self.module.exit_json(**self.result)
 
     def handle_power_status(self):
-        """this handles starting, stopping, and restarting servers"""
+        """Handles starting, stopping, and restarting servers"""
         # check if the server exist
         server_to_change_state = self._get_server_by_name()
         if not server_to_change_state:
@@ -236,33 +236,10 @@ class AnsibleSitehostServer:
 
         requested_server_state = self.module.params.get("state")
 
-        # always restart server when requested
-        if requested_server_state == "restarted":
-            #  check mode
-            if self.module.check_mode:
-                self.module.exit_json(changed=True)
+        body = OrderedDict()
+        body["name"] = self.module.params["name"]
 
-            body = OrderedDict()
-            body["name"] = self.module.params["name"]
-            body["state"] = "reboot"
-
-            restart_result = self.sh_api.api_query(
-                path="/server/change_state.json", method="POST", data=body
-            )
-
-            self.sh_api.wait_for_job(job_id=restart_result["return"]["job_id"])
-
-            self.module.exit_json(
-                changed=True,
-                msg=f"{self.module.params['name']} restarted",
-                server={
-                    "label": server_to_change_state["label"],
-                    "name": self.module.params["name"],
-                    "state": "On",
-                },
-            )
-
-        # otherwise get the current server state to check if task can be skipped
+        # get the current server state to check if task can be skipped
         current_server_state = self.sh_api.api_query(
             path="/server/get_state.json",
             query_params={"name": self.module.params["name"]},
@@ -286,11 +263,14 @@ class AnsibleSitehostServer:
             self.module.exit_json(changed=True)
 
         # the server state is different from requested state, start/stop server
-        body = OrderedDict()
-        body["name"] = self.module.params.get("name")
-        body["state"] = (
-            "power_on" if requested_server_state == "started" else "power_off"
-        )
+
+        # converts module user input to appropriate api call state
+        api_state_map = {
+            "restarted": "reboot",
+            "started": "power_on",
+            "stopped": "power_off",
+        }
+        body["state"] = api_state_map[requested_server_state]
 
         state_change_job = self.sh_api.api_query(
             path="/server/change_state.json", method="POST", data=body
@@ -397,7 +377,7 @@ class AnsibleSitehostServer:
 
         server_after_upgrade = self._get_server_by_name()
 
-        self.result["msg"] = f"{server_after_upgrade['name']} sucessfully upgraded"
+        self.result["msg"] = f"{server_after_upgrade['name']} successfully upgraded"
         self.result["server"] = server_after_upgrade
         self.result["changed"] = True
 
@@ -421,13 +401,11 @@ class AnsibleSitehostServer:
         retrieved_server = self.sh_api.api_query(
             path="/server/get_server.json",
             query_params=OrderedDict({"name": server_name}),
+            skip_status_check=True,
         )
 
         # if server exist, return it
-        if retrieved_server["status"]:
-            return retrieved_server["return"]
-
-        return None  # server does not exist
+        return retrieved_server["return"] if retrieved_server["status"] else None
 
 
 def main():

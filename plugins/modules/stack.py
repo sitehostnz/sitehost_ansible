@@ -8,6 +8,7 @@ __metaclass__ = type
 
 HTTP_GET = "GET"
 HTTP_POST = "POST"
+SCHEDULER_JOB_TYPE = "scheduler"
 
 DOCUMENTATION = r"""
 ---
@@ -214,20 +215,13 @@ class AnsibleSitehostStack:
 
         # creates Cloud Container
         api_result = self.sh_api.api_query(
-            path="/cloud/stack/add.json", method=HTTP_POST, data=body
+            path="/cloud/stack/add.json",
+            method=HTTP_POST,
+            data=body,
         )
 
-        # check if the operation succeeded or not
-        if not api_result["status"]:
-            # code 409 means that the container name/label already exist, skip task
-            if "code: 409" in api_result["msg"]:
-                self.module.exit_json(msg=api_result["msg"], changed=False)
-
-            # otherwise other error occured.
-            self.module.fail_json(msg=api_result["msg"])
-
         self.sh_api.wait_for_job(
-            job_id=api_result["return"]["job_id"], job_type="scheduler"
+            job_id=api_result["return"]["job_id"], job_type=SCHEDULER_JOB_TYPE
         )
 
         self.result["msg"] = f"Container {self.module.params['name']} created"
@@ -251,7 +245,9 @@ class AnsibleSitehostStack:
         if self.module.params.get("label"):  #  update label if defined
             body["params[label]"] = self.module.params["label"]
             self.result["changed"] = True
-        if self.module.params.get("docker_compose"): #  update docker_compose if defined
+        if self.module.params.get(
+            "docker_compose"
+        ):  #  update docker_compose if defined
             body["params[docker_compose]"] = self.module.params["docker_compose"]
             self.result["changed"] = True
 
@@ -259,14 +255,10 @@ class AnsibleSitehostStack:
             path="/cloud/stack/update.json", method=HTTP_POST, data=body
         )
 
-        # check if update is successful or not
-        if not api_result["status"]:
-            self.module.fail_json(msg=api_result["msg"])
-
         # if a scheduler job is created, wait for it
         if api_result.get("return"):
             self.sh_api.wait_for_job(
-                job_id=api_result["return"]["job_id"], job_type="scheduler"
+                job_id=api_result["return"]["job_id"], job_type=SCHEDULER_JOB_TYPE
             )
 
         self.result["msg"] = f"Container {self.module.params['name']} updated"
@@ -284,20 +276,22 @@ class AnsibleSitehostStack:
         body["server"] = self.module.params["server"]
         body["name"] = self.module.params["name"]
 
-        # deletes the Cloud Container
-        api_result = self.sh_api.api_query(
-            path="/cloud/stack/delete.json", method=HTTP_POST, data=body
-        )
-
-        # check if the container is already deleted
-        if not api_result["status"]:
+        # if container does not exist, then skip the task
+        if self._get_stack() is None:
             self.module.exit_json(
-                msg=f"Container {self.module.params['msg']} does not exist",
+                msg=f"Container {self.module.params['name']} does not exist",
                 changed=False,
             )
 
+        # deletes the Cloud Container
+        api_result = self.sh_api.api_query(
+            path="/cloud/stack/delete.json",
+            method=HTTP_POST,
+            data=body,
+        )
+
         self.sh_api.wait_for_job(
-            job_id=api_result["return"]["job_id"], job_type="scheduler"
+            job_id=api_result["return"]["job_id"], job_type=SCHEDULER_JOB_TYPE
         )
 
         self.result["msg"] = f"Container {self.module.params['name']} deleted"
@@ -326,6 +320,7 @@ class AnsibleSitehostStack:
                     ("name", container_to_check),
                 ]
             ),
+            skip_status_check=True,
         )
 
         return retrived_container["return"] if retrived_container["status"] else None
@@ -341,28 +336,6 @@ class AnsibleSitehostStack:
             self.module.fail_json(msg="ERROR: Specified container does not exist")
 
         requested_stack_state = self.module.params["state"]
-
-        # always restart the container when requested
-        if requested_stack_state == "restarted":
-            #  check mode
-            if self.module.check_mode:
-                self.module.exit_json(changed=True)
-            body = OrderedDict()
-            body["server"] = self.module.params["server"]
-            body["name"] = self.module.params["name"]
-
-            api_result = self.sh_api.api_query(
-                path="/cloud/stack/restart.json", method=HTTP_POST, data=body
-            )
-
-            self.sh_api.wait_for_job(
-                job_id=api_result["return"]["job_id"], job_type="scheduler"
-            )
-
-            self.result["msg"] = f"Container {self.module.params['name']} restarted"
-            self.result["stack"] = self._get_stack()
-            self.result["changed"] = True
-            self.module.exit_json(**self.result)
 
         # otherwise get the current container state to check if task can be skipped
         current_stack_state = self._get_stack()["containers"][0]["state"]
@@ -385,18 +358,18 @@ class AnsibleSitehostStack:
         body["server"] = self.module.params["server"]
         body["name"] = self.module.params["name"]
 
+        # converts module user input to appropriate api call state
+        api_state_map = {"started": "start", "stopped": "stop", "restarted": "restart"}
+
         # start or stop container
-        if requested_stack_state == "started":
-            api_result = self.sh_api.api_query(
-                path="/cloud/stack/start.json", method=HTTP_POST, data=body
-            )
-        else:
-            api_result = self.sh_api.api_query(
-                path="/cloud/stack/stop.json", method=HTTP_POST, data=body
-            )
+        api_result = self.sh_api.api_query(
+            path=f"/cloud/stack/{api_state_map[requested_stack_state]}.json",
+            method=HTTP_POST,
+            data=body,
+        )
 
         self.sh_api.wait_for_job(
-            job_id=api_result["return"]["job_id"], job_type="scheduler"
+            job_id=api_result["return"]["job_id"], job_type=SCHEDULER_JOB_TYPE
         )
         self.result[
             "msg"

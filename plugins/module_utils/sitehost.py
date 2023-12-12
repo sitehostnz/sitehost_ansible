@@ -46,7 +46,14 @@ class SitehostAPI:
                 exception=LIB_REQ_ERR,
             )
 
-    def api_query(self, path, method="GET", data=OrderedDict(), query_params=None):
+    def api_query(
+        self,
+        path,
+        method="GET",
+        data=OrderedDict(),
+        query_params=None,
+        skip_status_check=False,
+    ):
         """
         low level function that directly make http rquest to the sitehost api
 
@@ -55,6 +62,9 @@ class SitehostAPI:
                 method (str): defaults to "GET"
                 data (dict): payload to use when using methods like POST
                 query_params (dict): URL query string in dictionary form to use in methods like GET
+                skip_status_check (bool): Prevents module interruption when
+                    'status==False'. Set to True in cases where 'status==False' is a
+                    normal operational outcome.
 
             Return:
                 a dictionary of the output of the http request
@@ -84,13 +94,27 @@ class SitehostAPI:
 
         if r.status_code == HTTP_INTERNAL_SERVER_ERROR_STATUS_CODE:
             self.module.fail_json(
-                msg="An unexpected error has occured while calling SiteHost API",
+                msg=(
+                    "An unexpected error has occured while calling SiteHost API,"
+                    "please contact SiteHost support."
+                ),
                 path=path,
                 POST_data=data,
                 GET_params=query_params,
             )
 
         json_r = r.json()
+
+        # generally if the return status is false, there is an error
+        # interupt and stop the module execution unless `skip_status_check` is True
+        if json_r.get("status") is False and not skip_status_check:
+            self.module.fail_json(
+                msg=(
+                    f"An error has occured while calling the SiteHost API"
+                    f' With message: "{json_r["msg"]}".'
+                ),
+                error_code=r.status_code,
+            )
 
         # Success with content
         if r.status_code in (200, 201, 202):
