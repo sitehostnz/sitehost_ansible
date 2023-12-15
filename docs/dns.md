@@ -1,17 +1,17 @@
 <p align="center">
     <a href="https://sitehost.nz" target="_blank">
-        <img src="../.github/sitehost-logo.svg" height="130">
+        <img src="https://raw.githubusercontent.com/sitehostnz/sitehost_ansible/main/.github/sitehost-logo.svg" alt="SiteHost" height="130">
     </a>
 </p>
 
 # sitehost.cloud.dns
 Manages SiteHost DNS records and zones. Make sure to check out our [developer KB article](https://kb.sitehost.nz/developers) for more information on our API. Please ensure the `Domains: DNS` privilege is enabled for your SiteHost API key.
 
-- [parameters](#parameter)
-- [examples](#examples)
-- [return](#return-values)
+- [Parameters](#parameters)
+- [Examples](#examples)
+- [Return](#return-values)
 
-## Parameter
+## Parameters
 
  Field     | Type | Required | Description                                                                  |
 |-----------|------|----------|------------------------------------------------------------------------------|
@@ -23,7 +23,7 @@ Manages SiteHost DNS records and zones. Make sure to check out our [developer KB
 | `priority` | <center>`int`</center> | <center>Optional</center> | The priority of the host for `SRV` and `MX` records. | 
 | `content` | <center>`str`</center> | <center>Optional</center> | This is the value of the record, depending on the record type. |
 | `api_key` | <center>`str`</center> | <center>**Required**</center> | Your SiteHost API key [generated from CP](https://kb.sitehost.nz/developers/api#creating-an-api-key). |
-| `api_client_id` | <center>`int`</center> | <center>**Required**</center> | The client id of your SiteHost account. |
+| `api_client_id` | <center>`int`</center> | <center>**Required**</center> | The client ID of your SiteHost account. |
 
 ## Examples
 

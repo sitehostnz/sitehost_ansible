@@ -17,3 +17,14 @@ releases:
       name: dns
       namespace: ''
     release_date: '2023-09-28'
+  1.2.0:
+    changes:
+      minor_changes:
+      - sitehost.cloud.server - Now supports provisioning Cloud Container Servers.
+    fragments:
+    - minor_changes.yml
+    modules:
+    - description: Manages Cloud Containers
+      name: stack
+      namespace: ''
+    release_date: '2023-10-11'

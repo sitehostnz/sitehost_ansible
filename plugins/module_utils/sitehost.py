@@ -11,6 +11,8 @@ from ansible.module_utils.basic import env_fallback, missing_required_lib
 from ansible.module_utils.six.moves.urllib.parse import quote
 
 
+HTTP_INTERNAL_SERVER_ERROR_STATUS_CODE = 500
+
 try:
     import requests
 
@@ -44,7 +46,14 @@ class SitehostAPI:
                 exception=LIB_REQ_ERR,
             )
 
-    def api_query(self, path, method="GET", data=OrderedDict(), query_params=None):
+    def api_query(
+        self,
+        path,
+        method="GET",
+        data=OrderedDict(),
+        query_params=None,
+        skip_status_check=False,
+    ):
         """
         low level function that directly make http rquest to the sitehost api
 
@@ -53,6 +62,9 @@ class SitehostAPI:
                 method (str): defaults to "GET"
                 data (dict): payload to use when using methods like POST
                 query_params (dict): URL query string in dictionary form to use in methods like GET
+                skip_status_check (bool): Prevents module interruption when
+                    'status==False'. Set to True in cases where 'status==False' is a
+                    normal operational outcome.
 
             Return:
                 a dictionary of the output of the http request
@@ -80,7 +92,29 @@ class SitehostAPI:
             data=data,
         )
 
+        if r.status_code == HTTP_INTERNAL_SERVER_ERROR_STATUS_CODE:
+            self.module.fail_json(
+                msg=(
+                    "An unexpected error has occured while calling SiteHost API,"
+                    "please contact SiteHost support."
+                ),
+                path=path,
+                POST_data=data,
+                GET_params=query_params,
+            )
+
         json_r = r.json()
+
+        # generally if the return status is false, there is an error
+        # interupt and stop the module execution unless `skip_status_check` is True
+        if json_r.get("status") is False and not skip_status_check:
+            self.module.fail_json(
+                msg=(
+                    f"An error has occured while calling the SiteHost API"
+                    f' With message: "{json_r["msg"]}".'
+                ),
+                error_code=r.status_code,
+            )
 
         # Success with content
         if r.status_code in (200, 201, 202):
@@ -98,11 +132,13 @@ class SitehostAPI:
             error_code=r.status_code,
         )
 
-    def wait_for_job(self, job_id, state="Completed"):
+    def wait_for_job(self, job_id, job_type="daemon", state="Completed"):
         """
         use it to pause execution of ansible task until the job is completed
 
         :param job_id: the job id of the job to wait
+        :param job_type: Specifies the scheduler type: "scheduler" for cloud containers,
+                        or "daemon" for everything else.
         :param state: default to "Completed", the return state of when the job is consider done
         :returns: a dictionary of the job details
         """
@@ -110,13 +146,13 @@ class SitehostAPI:
             job_resource = self.api_query(
                 path="/job/get.json",
                 method="GET",
-                query_params=dict(job_id=job_id, type="daemon"),
+                query_params=dict(job_id=job_id, type=job_type),
             )
 
             job_status = job_resource.get("return")["state"]
 
             # return information on job details when it succeded
-            if ( job_status == state ):  
+            if job_status == state:
                 return job_resource["return"]
             elif job_status == "Failed":
                 self.module.fail_json(
@@ -131,12 +167,16 @@ class SitehostAPI:
             )
 
     @staticmethod
-    def _backoff(retry, retry_max_delay=12):
-        """pause the computation for some time, based on the number of retries
-        retries are kept track by the parent wait_for_job() function
+    def _backoff(retry, retry_max_delay=60):
+        """
+        Pause the computation for some time, based on the number of retries
+        retries are kept track by the parent wait_for_job() method.
 
         Basically with every iteration of retry, the function will wait alittle longer
         until it waits for a max of retry_max_delay seconds.
+
+        :param retry: The current iteration of the delay method
+        :param retry_max_delay: The maximum allowed time to wait per iteration
         """
         randomness = random.randint(0, 1000) / 1000.0
         delay = 2**retry + randomness
